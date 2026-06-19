@@ -51,6 +51,7 @@ export default function AdminCoursesPage() {
     event.preventDefault();
     try {
       setLoading(true);
+
       if (form.id) {
         await updateCourse(form.id, {
           name: form.name,
@@ -94,8 +95,31 @@ export default function AdminCoursesPage() {
       setForm(DEFAULT_COURSE_FORM);
       await load();
       clearMessage();
-    } catch {
-      setMessage("操作失敗，請稍後再試");
+    } catch (error) {
+      const anyError = error as { code?: string; message?: string };
+      const code = anyError.code || "unknown";
+      const detail = anyError.message || "未知錯誤，請稍後再試";
+      console.error("add course error", error);
+      console.error("error.code", code);
+      console.error("error.message", detail);
+
+      switch (code) {
+        case "permission-denied":
+          setMessage("操作失敗（permission-denied）：Missing or insufficient permissions");
+          break;
+        case "unauthenticated":
+          setMessage("操作失敗（unauthenticated）：請先登入管理員帳號。");
+          break;
+        case "invalid-argument":
+          setMessage("操作失敗（invalid-argument）：資料欄位格式不正確，請檢查課程欄位。");
+          break;
+        case "unavailable":
+          setMessage("操作失敗（unavailable）：服務暫時無法使用，請稍後再試。");
+          break;
+        default:
+          setMessage(`操作失敗（${code}）：${detail}`);
+          break;
+      }
     } finally {
       setLoading(false);
     }

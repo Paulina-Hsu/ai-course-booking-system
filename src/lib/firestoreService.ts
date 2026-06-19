@@ -125,7 +125,7 @@ export async function createCourse(input: CreateCourseInput): Promise<string> {
   if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
   const firestore = ensureDb();
 
-  const ref = await addDoc(collection(firestore, "courses"), {
+  const payload = cleanPayload({
     name: input.name.trim(),
     slug: input.slug.trim(),
     description: input.description.trim(),
@@ -141,6 +141,8 @@ export async function createCourse(input: CreateCourseInput): Promise<string> {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  const ref = await addDoc(collection(firestore, "courses"), payload);
 
   return ref.id;
 }
