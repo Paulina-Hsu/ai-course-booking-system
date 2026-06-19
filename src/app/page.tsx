@@ -35,6 +35,7 @@ export default function HomePage() {
         <Link
           href="/courses"
           className="mt-6 inline-flex items-center rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-slate-100"
+          style={{ backgroundColor: "#ffffff", color: "#0f172a" }}
         >
           前往課程列表
         </Link>
@@ -73,6 +74,7 @@ export default function HomePage() {
               <Link
                 href={`/courses/${course.id}`}
                 className="inline-flex items-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900"
+                style={{ color: "#0f172a" }}
               >
                 查看詳情
               </Link>

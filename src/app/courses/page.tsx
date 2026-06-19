@@ -57,12 +57,14 @@ export default function CoursesPage() {
                 <Link
                   href={`/courses/${course.id}`}
                   className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
+                  style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
                 >
                   查看詳情
                 </Link>
                 <Link
                   href={`/courses/${course.id}/booking`}
                   className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-900"
+                  style={{ color: "#0f172a" }}
                 >
                   立即報名
                 </Link>

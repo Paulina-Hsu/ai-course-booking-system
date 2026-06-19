@@ -99,6 +99,7 @@ function BookingSuccessContent() {
       <Link
         href="/courses"
         className="mt-5 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm text-white"
+        style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
       >
         回到課程列表
       </Link>

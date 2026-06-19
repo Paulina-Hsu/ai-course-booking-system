@@ -254,6 +254,7 @@ export default function BookingPage() {
           <button
             type="submit"
             className="w-full rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white"
+            style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
             disabled={loading}
           >
             {loading ? "送出中..." : "送出報名"}

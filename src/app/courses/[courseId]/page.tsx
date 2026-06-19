@@ -123,6 +123,7 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
         <Link
           href={`/courses/${course.id}/booking`}
           className="mt-2 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm text-white"
+          style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
         >
           前往報名
         </Link>
