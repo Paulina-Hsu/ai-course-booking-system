@@ -1,4 +1,4 @@
-import { FirebaseApp, FirebaseOptions, initializeApp, getApps, getApp } from "firebase/app";
+﻿import { getApp, getApps, initializeApp, FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -12,7 +12,7 @@ const config: FirebaseOptions = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const isConfigReady = Boolean(
+export const isFirebaseReady = Boolean(
   config.apiKey &&
     config.authDomain &&
     config.projectId &&
@@ -21,13 +21,11 @@ const isConfigReady = Boolean(
     config.appId,
 );
 
-export const isFirebaseReady = isConfigReady;
-
-let firebaseApp: FirebaseApp | undefined;
-
-if (isConfigReady) {
-  firebaseApp = getApps().length > 0 ? getApp() : initializeApp(config);
-}
+const firebaseApp = isFirebaseReady
+  ? getApps().length > 0
+    ? getApp()
+    : initializeApp(config)
+  : null;
 
 export const app = firebaseApp;
 export const db = firebaseApp ? getFirestore(firebaseApp) : null;

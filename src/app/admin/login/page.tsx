@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!auth) {
-      setMessage("Firebase 尚未設定，請先完成環境變數");
+      setMessage("Firebase 尚未設定，請先確認環境變數");
       return;
     }
 
@@ -24,7 +24,7 @@ export default function AdminLoginPage() {
       await signInWithEmailAndPassword(auth, email, password);
       router.push("/admin/dashboard");
     } catch {
-      setMessage("登入失敗，請確認帳號密碼");
+      setMessage("登入失敗，請確認帳號、密碼");
     } finally {
       setIsLoading(false);
     }
@@ -33,9 +33,7 @@ export default function AdminLoginPage() {
   return (
     <section className="card max-w-md">
       <h1 className="text-2xl font-bold">管理員登入</h1>
-      <p className="text-sm text-slate-600">
-        {isFirebaseReady ? "請輸入 Firebase 帳號密碼" : "請先完成 Firebase 環境變數設定"}
-      </p>
+      <p className="text-sm text-slate-600">請使用 Firebase Authentication（Email/Password）。</p>
 
       <form onSubmit={onSubmit} className="mt-4 space-y-3">
         <input
@@ -49,7 +47,7 @@ export default function AdminLoginPage() {
         <input
           required
           type="password"
-          placeholder="••••••••"
+          placeholder="密碼"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           className="w-full rounded-lg border border-slate-300 px-3 py-2"
@@ -63,6 +61,9 @@ export default function AdminLoginPage() {
         </button>
       </form>
       {message ? <p className="mt-2 text-sm text-red-600">{message}</p> : null}
+      <p className="mt-3 text-xs text-slate-500">
+        Firebase 狀態：{isFirebaseReady ? "已啟用" : "未啟用"}
+      </p>
     </section>
   );
 }

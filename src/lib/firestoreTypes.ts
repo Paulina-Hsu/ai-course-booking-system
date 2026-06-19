@@ -1,17 +1,16 @@
-export type BookingStatus = "pending" | "confirmed" | "paid" | "cancelled" | "waitlist";
+﻿export type BookingStatus = "pending" | "confirmed" | "paid" | "cancelled" | "waitlist";
 
 export type CourseType = "group" | "oneOnOne";
 
 export type SessionStatus = "open" | "closed";
 
-export type SlotBookingStatus = "available" | "booked";
-
-export interface TimestampedDocument {
-  createdAt?: string;
-  updatedAt?: string;
+export interface FirestoreMeta {
+  id?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
-export interface Course extends TimestampedDocument {
+export interface Course extends FirestoreMeta {
   id: string;
   name: string;
   slug: string;
@@ -27,7 +26,7 @@ export interface Course extends TimestampedDocument {
   pricePerHour?: number;
 }
 
-export interface Session extends TimestampedDocument {
+export interface Session extends FirestoreMeta {
   id: string;
   courseId: string;
   title: string;
@@ -39,9 +38,10 @@ export interface Session extends TimestampedDocument {
   maxCapacity: number;
   enrolledCount: number;
   status: SessionStatus;
+  isFull: boolean;
 }
 
-export interface OneOnOneSlot extends TimestampedDocument {
+export interface OneOnOneSlot extends FirestoreMeta {
   id: string;
   date: string;
   startTime: string;
@@ -51,10 +51,10 @@ export interface OneOnOneSlot extends TimestampedDocument {
   maxCapacity: number;
   isBooked: boolean;
   studentPhone?: string;
-  bookingId?: string;
+  bookingId?: string | null;
 }
 
-export interface Booking extends TimestampedDocument {
+export interface Booking extends FirestoreMeta {
   id: string;
   courseId: string;
   sessionId?: string;
@@ -74,13 +74,12 @@ export interface Admin {
   role: "admin";
 }
 
-export interface Settings {
-  id: "global";
-  maxCapacityPerGroupSession: number;
-  groupLessonCount: number;
+export interface Settings extends FirestoreMeta {
+  id: string;
+  maxCapacityPerSession: number;
+  sessionsPerBatch: number;
   paymentEnabled: boolean;
   allowWaitlist: boolean;
-  maintenance: boolean;
 }
 
 export const BOOKING_STATUS_OPTIONS: { value: BookingStatus; label: string }[] = [
@@ -89,4 +88,9 @@ export const BOOKING_STATUS_OPTIONS: { value: BookingStatus; label: string }[] =
   { value: "paid", label: "已付款" },
   { value: "cancelled", label: "已取消" },
   { value: "waitlist", label: "候補" },
+];
+
+export const COURSE_TYPE_OPTIONS: { value: CourseType; label: string }[] = [
+  { value: "group", label: "團體班" },
+  { value: "oneOnOne", label: "1對1" },
 ];
