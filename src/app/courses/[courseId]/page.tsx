@@ -162,7 +162,7 @@ export default function CourseDetailPage() {
             {course.type === "oneOnOne" ? "Personal AI Coaching" : "Group Course"}
           </p>
           <h1 className="text-2xl font-bold md:text-3xl">{course.name}</h1>
-          <p className="max-w-3xl text-sm leading-relaxed text-slate-700 md:text-base">
+          <p className="w-full text-sm leading-relaxed text-slate-700 md:whitespace-nowrap md:text-base">
             {content.intro || course.description}
           </p>
         </div>
