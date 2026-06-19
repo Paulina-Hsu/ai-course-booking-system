@@ -101,16 +101,30 @@ function cleanPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(entries);
 }
 
-type LegacyCourseRecord = Course & {
+type LegacyCourseRecord = Omit<Course, "timeSlots"> & {
   title?: string;
   courseType?: CourseType;
+  capacity?: number;
+  timeSlots?: string[] | string | null;
 };
 
 function normalizeCourseRecord(record: LegacyCourseRecord): Course {
+  const type = record.type || record.courseType || "group";
+  const defaultTimeSlots = type === "oneOnOne" ? ["08:30-09:30"] : ["10:00-12:00", "14:00-16:00"];
+  const timeSlots = Array.isArray(record.timeSlots)
+    ? record.timeSlots
+    : typeof record.timeSlots === "string"
+      ? record.timeSlots.split(/[,，]/).map((timeSlot) => timeSlot.trim()).filter(Boolean)
+      : defaultTimeSlots;
+
   return {
     ...record,
     name: record.name || record.title || "",
-    type: record.type || record.courseType || "group",
+    type,
+    maxCapacity: record.maxCapacity || record.capacity || DEFAULT_SESSION_CAPACITY,
+    sessionsCount: record.sessionsCount || (type === "oneOnOne" ? 1 : 4),
+    durationMinutes: record.durationMinutes || (type === "oneOnOne" ? 60 : 120),
+    timeSlots: timeSlots.length > 0 ? timeSlots : defaultTimeSlots,
   };
 }
 
@@ -133,7 +147,7 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
   const firestore = ensureDb();
   const snap = await getDoc(doc(firestore, "courses", courseId));
   if (!snap.exists()) return null;
-  return mapDoc<Course>(snap);
+  return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(snap));
 }
 
 export interface CreateCourseInput {

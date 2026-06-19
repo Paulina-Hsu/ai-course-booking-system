@@ -23,7 +23,10 @@ export default function CoursesPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {courses.map((course) => (
+        {courses.map((course) => {
+          const timeSlots = Array.isArray(course.timeSlots) ? course.timeSlots : [];
+
+          return (
           <div key={course.id} className="card space-y-3">
             <div className="flex items-start justify-between">
               <h2 className="text-lg font-semibold">{course.name}</h2>
@@ -35,7 +38,7 @@ export default function CoursesPage() {
             <p className="text-sm">
               會員價：{formatCurrency(course.memberPrice)} / 非會員價：{formatCurrency(course.nonMemberPrice)}
             </p>
-            <p className="text-xs text-slate-500">時段：{course.timeSlots.join(" / ")}</p>
+            <p className="text-xs text-slate-500">時段：{timeSlots.join(" / ")}</p>
             <p className="text-xs text-slate-500">每期 4 堂，團體每堂 2 小時</p>
             <div className="flex flex-col gap-2 pt-2 sm:flex-row">
               <Link
@@ -52,7 +55,8 @@ export default function CoursesPage() {
               </Link>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {courses.length === 0 ? <p>尚未讀取到課程資料，請先設定 Firebase 並完成 seed。</p> : null}

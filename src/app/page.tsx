@@ -44,7 +44,10 @@ export default function HomePage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        {courses.map((course) => (
+        {courses.map((course) => {
+          const timeSlots = Array.isArray(course.timeSlots) ? course.timeSlots : [];
+
+          return (
           <div key={course.id} className="card space-y-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">{course.slug}</p>
             <h3 className="text-lg font-semibold">{course.name}</h3>
@@ -52,7 +55,7 @@ export default function HomePage() {
             <p className="text-sm">
               會員價：{formatCurrency(course.memberPrice)} / 非會員價：{formatCurrency(course.nonMemberPrice)}
             </p>
-            <p className="text-xs text-slate-500">時段：{course.timeSlots.join(" / ")}</p>
+            <p className="text-xs text-slate-500">時段：{timeSlots.join(" / ")}</p>
             <Link
               href={`/courses/${course.id}`}
               className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm font-medium"
@@ -60,7 +63,8 @@ export default function HomePage() {
               查看課程
             </Link>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
