@@ -128,7 +128,10 @@ type LegacySessionRecord = Partial<Omit<Session, "id">> & {
 };
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
-  const numericValue = typeof value === "string" ? Number(value) : value;
+  const numericValue =
+    typeof value === "string"
+      ? Number(value.replace(/[,\s]/g, "").replace(/^NT\$/i, ""))
+      : value;
   return typeof numericValue === "number" && Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
@@ -142,6 +145,17 @@ function resolveCourseType(record: LegacyCourseRecord): CourseType {
   const slug = normalizeText(record.slug || record.legacyId || record.id);
   const name = normalizeText(record.name || record.title);
   const combined = `${rawType} ${rawCourseType} ${slug} ${name}`;
+  const isKnownGroupCourse =
+    combined.includes("mobile-ai-basic") ||
+    combined.includes("ai-image-video-creation") ||
+    combined.includes("imagevideocreation") ||
+    combined.includes("圖影創作") ||
+    combined.includes("saturday") ||
+    combined.includes("elite") ||
+    combined.includes("手機ai初階") ||
+    combined.includes("週六菁英");
+  if (isKnownGroupCourse) return "group";
+
   const isOneOnOne =
     rawType === "oneonone" ||
     rawType === "one-on-one" ||
@@ -157,6 +171,34 @@ function resolveCourseType(record: LegacyCourseRecord): CourseType {
     combined.includes("專屬ai課程");
 
   return isOneOnOne ? "oneOnOne" : "group";
+}
+
+export function getCoursePriceNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const numericValue = toFiniteNumber(value, Number.NaN);
+    if (Number.isFinite(numericValue)) return numericValue;
+  }
+  return 0;
+}
+
+export function calculateBookingAmount(course: Course, isMember: boolean): number {
+  if (course.type === "oneOnOne") {
+    return getCoursePriceNumber(course.pricePerHour, course.memberPrice, course.nonMemberPrice);
+  }
+
+  return isMember
+    ? getCoursePriceNumber(course.memberPrice)
+    : getCoursePriceNumber(course.nonMemberPrice);
+}
+
+export function formatCoursePriceText(course: Course): string {
+  const formatCurrency = (value: number) => `NT$${new Intl.NumberFormat("zh-TW").format(value)}`;
+
+  if (course.type === "oneOnOne") {
+    return `費用：${formatCurrency(getCoursePriceNumber(course.pricePerHour, course.memberPrice, course.nonMemberPrice))}／小時`;
+  }
+
+  return `費用：會員價 ${formatCurrency(getCoursePriceNumber(course.memberPrice))}／非會員價 ${formatCurrency(getCoursePriceNumber(course.nonMemberPrice))}`;
 }
 
 function normalizeCourseRecord(record: LegacyCourseRecord): Course {
@@ -617,12 +659,7 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
 
   const normalizedPhone = normalizePhone(input.phone);
   const bookingRef = doc(collection(firestore, "bookings"));
-  const amount =
-    course.type === "oneOnOne"
-      ? course.pricePerHour || course.memberPrice
-      : input.isMember
-        ? course.memberPrice
-        : course.nonMemberPrice;
+  const amount = calculateBookingAmount(course, input.isMember);
 
   if (input.sessionId) {
     const sessionId = input.sessionId;

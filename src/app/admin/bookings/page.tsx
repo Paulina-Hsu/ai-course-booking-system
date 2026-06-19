@@ -51,6 +51,10 @@ function displayContactPreference(value?: ContactPreference): string {
   return value ? contactPreferenceMap[value] || value : "未填寫";
 }
 
+function formatBookingAmount(amount: number): string {
+  return `NT$${new Intl.NumberFormat("zh-TW").format(Number(amount) || 0)}`;
+}
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<(Booking & { id: string })[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -261,7 +265,7 @@ export default function AdminBookingsPage() {
                         : "-"}
                   </span>
                 </td>
-                <td className="border border-slate-200 px-3 py-2">NT$ {booking.amount}</td>
+                <td className="border border-slate-200 px-3 py-2">{formatBookingAmount(booking.amount)}</td>
                 <td className="border border-slate-200 px-3 py-2">
                   <select
                     className="w-full rounded border border-slate-300 px-2 py-1"

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
-import { getCourseById, listOneOnOneSlots, listSessionClassDates, listSessions } from "@/lib/firestoreService";
+import { formatCoursePriceText, getCourseById, listOneOnOneSlots, listSessionClassDates, listSessions } from "@/lib/firestoreService";
 import { getCourseDetailContent } from "@/lib/courseContent";
 
 function getSessionCapacity(session: Session): number {
@@ -129,23 +129,10 @@ export default function CourseDetailPage() {
     );
   }
 
-  const getNumericPrice = (...values: unknown[]) => {
-    for (const value of values) {
-      const numericValue = typeof value === "string" ? Number(value) : value;
-      if (typeof numericValue === "number" && Number.isFinite(numericValue)) {
-        return numericValue;
-      }
-    }
-    return 0;
-  };
-  const formatCurrency = (value: number) => `NT$${new Intl.NumberFormat("zh-TW").format(value)}`;
   const content = getCourseDetailContent(course);
   const groupSessions = terms.filter((term): term is Session => "courseId" in term);
   const oneOnOneSlots = terms.filter((term): term is OneOnOneSlot => !("courseId" in term));
-  const priceText =
-    course.type === "oneOnOne"
-      ? `${formatCurrency(getNumericPrice(course.pricePerHour, course.memberPrice, course.nonMemberPrice))} / 小時`
-      : `會員價：${formatCurrency(getNumericPrice(course.memberPrice))} / 非會員價：${formatCurrency(getNumericPrice(course.nonMemberPrice))}`;
+  const priceText = formatCoursePriceText(course);
   const scheduleText =
     course.type === "oneOnOne" ? "每次 1 小時，08:30-09:30 可預約" : "每期 4 堂，每堂 2 小時";
   const ctaText = course.type === "oneOnOne" ? "預約 1 對 1" : "立即報名";

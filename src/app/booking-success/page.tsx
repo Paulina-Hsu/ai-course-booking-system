@@ -26,7 +26,8 @@ const contactPreferenceMap: Record<ContactPreference, string> = {
 };
 
 function formatCurrency(value: number) {
-  return `NT$ ${new Intl.NumberFormat("zh-TW").format(value)}`;
+  const numericValue = Number(value) || 0;
+  return `NT$${new Intl.NumberFormat("zh-TW").format(numericValue)}`;
 }
 
 function displayValue(value: unknown): string {

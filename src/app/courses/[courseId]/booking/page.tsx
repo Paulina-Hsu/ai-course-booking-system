@@ -5,6 +5,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ContactPreference, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
+  calculateBookingAmount,
+  formatCoursePriceText,
   createBooking,
   getCourseById,
   listSessionClassDates,
@@ -54,16 +56,6 @@ function getSessionCapacity(session: Session): number {
 function isSessionOpen(session: Session): boolean {
   if (session.isOpen === false) return false;
   return true;
-}
-
-function getNumericPrice(...values: unknown[]): number {
-  for (const value of values) {
-    const numericValue = typeof value === "string" ? Number(value) : value;
-    if (typeof numericValue === "number" && Number.isFinite(numericValue)) {
-      return numericValue;
-    }
-  }
-  return 0;
 }
 
 function formatDateValue(value: unknown): string {
@@ -185,13 +177,8 @@ export default function BookingPage() {
     void init();
   }, [courseId]);
 
-  const amount = course
-    ? course.type === "oneOnOne"
-      ? getNumericPrice(course.pricePerHour, course.memberPrice, course.nonMemberPrice)
-      : isMember
-        ? getNumericPrice(course.memberPrice)
-        : getNumericPrice(course.nonMemberPrice)
-    : 0;
+  const amount = course ? calculateBookingAmount(course, isMember) : 0;
+  const priceText = course ? formatCoursePriceText(course) : "";
   const selectedSlotInfo = slots.find((slot) => slot.id === selectedSlot);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -429,7 +416,12 @@ export default function BookingPage() {
           />
         </label>
 
-        <p className="md:col-span-2 text-sm">預估費用：NT$ {amount}</p>
+        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p>{priceText}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            本次報名金額：{`NT$${new Intl.NumberFormat("zh-TW").format(amount)}`}
+          </p>
+        </div>
 
         <div className="md:col-span-2">
           <button
