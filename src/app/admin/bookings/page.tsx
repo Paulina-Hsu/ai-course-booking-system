@@ -8,6 +8,7 @@ import {
   listBookings,
   listCourses,
   listOneOnOneSlots,
+  listSessionClassDates,
   listSessions,
   updateBookingStatus,
 } from "@/lib/firestoreService";
@@ -29,6 +30,14 @@ function getSessionLabel(session?: Session) {
   return formatSessionLabel(session);
 }
 
+function getSessionClassDatesText(session?: Session) {
+  if (!session) return "";
+  return listSessionClassDates(session)
+    .slice(0, 4)
+    .map((date, index) => `第 ${index + 1} 堂：${date.replaceAll("-", "/")}`)
+    .join("\n");
+}
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<(Booking & { id: string })[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -45,6 +54,11 @@ export default function AdminBookingsPage() {
   );
 
   const sessionMap = useMemo(() => Object.fromEntries(sessions.map((session) => [session.id, getSessionLabel(session)])), [sessions]);
+
+  const sessionClassDatesMap = useMemo(
+    () => Object.fromEntries(sessions.map((session) => [session.id, getSessionClassDatesText(session)])),
+    [sessions],
+  );
 
   const slotMap = useMemo(
     () => Object.fromEntries(slots.map((slot) => [slot.id, `${slot.date} ${slot.startTime}-${slot.endTime}`])),
@@ -139,7 +153,7 @@ export default function AdminBookingsPage() {
           <option value="">全部期別</option>
           {sessions.map((session) => (
             <option key={session.id} value={session.id}>
-              {session.title}
+              {getSessionLabel(session)}
             </option>
           ))}
           {slots.map((slot) => (
@@ -186,11 +200,13 @@ export default function AdminBookingsPage() {
                 <td className="border border-slate-200 px-3 py-2">{booking.phone}</td>
                 <td className="border border-slate-200 px-3 py-2">{courseMap[booking.courseId] || booking.courseId}</td>
                 <td className="border border-slate-200 px-3 py-2">
-                  {booking.sessionId
-                    ? sessionMap[booking.sessionId] || ""
-                    : booking.oneOnOneSlotId
-                      ? slotMap[booking.oneOnOneSlotId] || ""
-                      : "-"}
+                  <span title={booking.sessionId ? sessionClassDatesMap[booking.sessionId] || undefined : undefined}>
+                    {booking.sessionId
+                      ? sessionMap[booking.sessionId] || booking.sessionId
+                      : booking.oneOnOneSlotId
+                        ? slotMap[booking.oneOnOneSlotId] || booking.oneOnOneSlotId
+                        : "-"}
+                  </span>
                 </td>
                 <td className="border border-slate-200 px-3 py-2">NT$ {booking.amount}</td>
                 <td className="border border-slate-200 px-3 py-2">

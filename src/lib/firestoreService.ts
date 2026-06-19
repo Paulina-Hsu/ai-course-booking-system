@@ -297,6 +297,14 @@ export async function listSessions(courseId?: string): Promise<Session[]> {
     });
 }
 
+export async function getSessionById(sessionId: string): Promise<Session | null> {
+  if (!isFirebaseReady) return null;
+  const firestore = ensureDb();
+  const snap = await getDoc(doc(firestore, "sessions", sessionId));
+  if (!snap.exists()) return null;
+  return normalizeSessionRecord(mapDoc<LegacySessionRecord>(snap));
+}
+
 export interface CreateSessionInput {
   courseId: string;
   title: string;
@@ -422,6 +430,14 @@ export async function listOneOnOneSlots(): Promise<OneOnOneSlot[]> {
     .sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));
 }
 
+export async function getOneOnOneSlotById(slotId: string): Promise<OneOnOneSlot | null> {
+  if (!isFirebaseReady) return null;
+  const firestore = ensureDb();
+  const snap = await getDoc(doc(firestore, "oneOnOneSlots", slotId));
+  if (!snap.exists()) return null;
+  return mapDoc<OneOnOneSlot>(snap);
+}
+
 export interface CreateOneOnOneSlotInput {
   date: string;
   startTime: string;
@@ -518,6 +534,14 @@ export async function listBookings(filters: BookingQueryFilter = {}): Promise<(B
 
   const bookings = snapshot.docs.map((d) => mapDoc<Booking>(d));
   return bookings.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
+}
+
+export async function getBookingById(bookingId: string): Promise<(Booking & { id: string }) | null> {
+  if (!isFirebaseReady) return null;
+  const firestore = ensureDb();
+  const snap = await getDoc(doc(firestore, "bookings", bookingId));
+  if (!snap.exists()) return null;
+  return mapDoc<Booking>(snap);
 }
 
 export interface CreateBookingInput {
@@ -758,9 +782,11 @@ export async function getBookingCounts() {
 }
 
 export const formatSessionLabel = (session: Session): string => {
-  const firstDate = toDateInputValue(session.firstClassDate || session.startDate);
-  if (!firstDate) return session.title;
-  return `${firstDate} ${session.startTime}-${session.endTime}`;
+  const firstDate = toDateInputValue(session.firstClassDate || session.startDate).replaceAll("-", "/");
+  const title = session.title || session.id;
+  const dateText = firstDate ? `${firstDate} 起` : "日期未設定";
+  const timeText = `${session.startTime || "時間未設定"}-${session.endTime || ""}`.replace(/-$/, "");
+  return `${title}｜${dateText}｜${timeText}`;
 };
 
 export const listSessionClassDates = (session: Session): string[] => {
