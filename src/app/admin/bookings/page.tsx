@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { BOOKING_STATUS_OPTIONS, Booking, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
+  formatSessionLabel,
   listBookings,
   listCourses,
   listOneOnOneSlots,
@@ -23,6 +24,11 @@ function buildCsv(rows: string[][], headers: string[]) {
   return lines.join("\n");
 }
 
+function getSessionLabel(session?: Session) {
+  if (!session) return "";
+  return formatSessionLabel(session);
+}
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<(Booking & { id: string })[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -38,10 +44,7 @@ export default function AdminBookingsPage() {
     [courses],
   );
 
-  const sessionMap = useMemo(
-    () => Object.fromEntries(sessions.map((session) => [session.id, `${session.title} (${session.startDate})`])),
-    [sessions],
-  );
+  const sessionMap = useMemo(() => Object.fromEntries(sessions.map((session) => [session.id, getSessionLabel(session)])), [sessions]);
 
   const slotMap = useMemo(
     () => Object.fromEntries(slots.map((slot) => [slot.id, `${slot.date} ${slot.startTime}-${slot.endTime}`])),
@@ -56,7 +59,7 @@ export default function AdminBookingsPage() {
         sessionId: filterSessionId || undefined,
         status: filterStatus || undefined,
       }),
-      listCourses(),
+      listCourses(true),
       listSessions(),
       listOneOnOneSlots(),
     ]);

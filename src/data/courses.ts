@@ -109,6 +109,7 @@ export const DEFAULT_ONE_ON_ONE_SLOTS: OneOnOneSlot[] = [
     pricePerHour: 1600,
     maxCapacity: 1,
     isBooked: false,
+    isOpen: true,
   },
   {
     id: "o1-2026-08-02",
@@ -119,6 +120,7 @@ export const DEFAULT_ONE_ON_ONE_SLOTS: OneOnOneSlot[] = [
     pricePerHour: 1600,
     maxCapacity: 1,
     isBooked: false,
+    isOpen: true,
   },
   {
     id: "o1-2026-08-03",
@@ -129,5 +131,6 @@ export const DEFAULT_ONE_ON_ONE_SLOTS: OneOnOneSlot[] = [
     pricePerHour: 1600,
     maxCapacity: 1,
     isBooked: false,
+    isOpen: true,
   },
 ];

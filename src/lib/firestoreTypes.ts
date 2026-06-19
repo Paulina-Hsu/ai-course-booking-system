@@ -30,15 +30,34 @@ export interface Session extends FirestoreMeta {
   id: string;
   courseId: string;
   title: string;
-  startDate: string;
-  endDate: string;
-  weekday: number;
+  weekday: string | number;
   startTime: string;
   endTime: string;
-  maxCapacity: number;
+
+  /**
+   * 期別起始日期（第一堂）
+   */
+  firstClassDate?: unknown;
+
+  /**
+   * 四堂課日期陣列（每週 1 次）
+   */
+  classDates?: unknown[];
+
+  /**
+   * 舊資料保留欄位：舊版範例資料可能還有 startDate/endDate
+   */
+  startDate?: string;
+  endDate?: string;
+
+  capacity?: number;
+  maxCapacity?: number;
+
   enrolledCount: number;
-  status: SessionStatus;
   isFull: boolean;
+
+  status?: SessionStatus;
+  isOpen?: boolean;
 }
 
 export interface OneOnOneSlot extends FirestoreMeta {
@@ -50,7 +69,8 @@ export interface OneOnOneSlot extends FirestoreMeta {
   pricePerHour: number;
   maxCapacity: number;
   isBooked: boolean;
-  studentPhone?: string;
+  isOpen: boolean;
+  studentPhone?: string | null;
   bookingId?: string | null;
 }
 

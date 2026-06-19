@@ -4,11 +4,29 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
-import { createBooking, getCourseById, listOneOnOneSlots, listSessions } from "@/lib/firestoreService";
+import {
+  createBooking,
+  getCourseById,
+  listOneOnOneSlots,
+  listSessions,
+} from "@/lib/firestoreService";
 
 interface SlotInfo {
   id: string;
   title: string;
+  disabled: boolean;
+}
+
+function getSessionCapacity(session: Session): number {
+  if (typeof session.capacity === "number" && Number.isFinite(session.capacity)) return session.capacity;
+  if (typeof session.maxCapacity === "number" && Number.isFinite(session.maxCapacity)) return session.maxCapacity;
+  return 18;
+}
+
+function isSessionOpen(session: Session): boolean {
+  if (session.isOpen === false) return false;
+  if (session.status === "closed") return false;
+  return true;
 }
 
 export default function BookingPage() {
@@ -37,21 +55,42 @@ export default function BookingPage() {
       if (foundCourse.type === "group") {
         const sessions = await listSessions(foundCourse.id);
         setSlots(
-          sessions.map((session: Session) => ({
-            id: session.id,
-            title: `${session.startDate} ${session.startTime}-${session.endTime}`,
-          })),
+          sessions.map((session: Session) => {
+            const capacity = getSessionCapacity(session);
+            const isFull = session.enrolledCount >= capacity || session.isFull;
+            const isOpen = isSessionOpen(session);
+            return {
+              id: session.id,
+              title: `${session.startDate || ""}${session.startDate ? " " : ""}${session.startTime}-${session.endTime}` +
+                (isFull ? "（已額滿）" : isOpen ? "" : "（已關閉）"),
+              disabled: !isOpen || isFull,
+            };
+          }),
         );
       } else {
         const list = await listOneOnOneSlots();
-        setSlots(list.map((slot: OneOnOneSlot) => ({ id: slot.id, title: `${slot.date} ${slot.startTime}-${slot.endTime}` })));
+        setSlots(
+          list.map((slot: OneOnOneSlot) => ({
+            id: slot.id,
+            title: `${slot.date} ${slot.startTime}-${slot.endTime}` +
+              (slot.isBooked ? "（已預約）" : "") +
+              (slot.isOpen === false ? "（已關閉）" : ""),
+            disabled: slot.isBooked || slot.isOpen === false,
+          })),
+        );
       }
     };
 
     init();
   }, [params.courseId]);
 
-  const amount = course ? (isMember ? course.memberPrice : course.nonMemberPrice) : 0;
+  const amount = course
+    ? course.type === "oneOnOne"
+      ? course.pricePerHour || course.memberPrice
+      : isMember
+        ? course.memberPrice
+        : course.nonMemberPrice
+    : 0;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -142,7 +181,7 @@ export default function BookingPage() {
           >
             <option value="">請選擇</option>
             {slots.map((slot) => (
-              <option key={slot.id} value={slot.id}>
+              <option key={slot.id} value={slot.id} disabled={slot.disabled}>
                 {slot.title}
               </option>
             ))}
