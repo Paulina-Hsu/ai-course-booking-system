@@ -70,6 +70,14 @@ export default function CoursesPage() {
                   立即報名
                 </Link>
               </div>
+              {process.env.NODE_ENV === "development" ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-500">
+                  <p className="font-medium text-slate-600">開發除錯資訊</p>
+                  <p>course.id：{course.id || "-"}</p>
+                  <p>course.slug：{course.slug || "-"}</p>
+                  <p>course.name：{course.name || "-"}</p>
+                </div>
+              ) : null}
             </div>
           );
         })}

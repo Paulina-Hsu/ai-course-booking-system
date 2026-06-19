@@ -78,7 +78,7 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
     return (
       <section className="card max-w-2xl space-y-3">
         <h1 className="text-2xl font-bold">找不到課程：{params.courseId}</h1>
-        <p className="text-sm text-slate-600">請回到課程列表重新選擇課程。</p>
+        <p className="text-sm text-slate-600">請回課程列表確認課程 id / slug。</p>
         <Link href="/courses" className="inline-flex rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-900">
           回到課程列表
         </Link>
