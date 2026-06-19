@@ -191,8 +191,12 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
   if (!isFirebaseReady) return null;
   const firestore = ensureDb();
   const snap = await getDoc(doc(firestore, "courses", courseId));
-  if (!snap.exists()) return null;
-  return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(snap));
+  if (snap.exists()) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(snap));
+
+  const slugSnapshot = await getDocs(query(collection(firestore, "courses"), where("slug", "==", courseId)));
+  const slugMatch = slugSnapshot.docs[0];
+  if (!slugMatch) return null;
+  return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(slugMatch));
 }
 
 export interface CreateCourseInput {
