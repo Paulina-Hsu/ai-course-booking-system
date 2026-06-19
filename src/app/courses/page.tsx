@@ -56,13 +56,13 @@ export default function CoursesPage() {
               <div className="flex flex-col gap-2 pt-2 sm:flex-row">
                 <Link
                   href={`/courses/${course.id}`}
-                  className="rounded-full bg-slate-900 px-4 py-2 text-center text-sm text-white"
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
                 >
                   查看詳情
                 </Link>
                 <Link
                   href={`/courses/${course.id}/booking`}
-                  className="rounded-full border border-slate-300 px-4 py-2 text-center text-sm"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-900"
                 >
                   立即報名
                 </Link>
@@ -72,7 +72,7 @@ export default function CoursesPage() {
         })}
       </div>
 
-      {courses.length === 0 ? <p>尚未讀取到課程資料，請先設定 Firebase 並完成 seed。</p> : null}
+      {courses.length === 0 ? <p>目前尚未讀取到課程資料，請稍後再試或聯絡管理員確認課程設定。</p> : null}
     </section>
   );
 }

@@ -30,13 +30,13 @@ export default function HomePage() {
         <p className="mb-2 text-sm tracking-wider opacity-95">AI COURSE BOOKING</p>
         <h1 className="text-2xl font-bold leading-tight md:text-4xl">AI 課程線上報名系統</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-sky-100 md:text-base">
-          先建立課程與期別後，即可直接提供學員線上瀏覽、選擇與報名。首次可用 seed 建立初始資料。
+          選擇適合你的 AI 課程，查看期別與上課時段，線上送出報名資料，管理員確認後即完成報名。
         </p>
         <Link
           href="/courses"
-          className="mt-6 inline-flex rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+          className="mt-6 inline-flex items-center rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-slate-100"
         >
-          前往報名
+          前往課程列表
         </Link>
       </div>
 
@@ -72,7 +72,7 @@ export default function HomePage() {
               <p className="text-xs text-slate-500">{scheduleText}</p>
               <Link
                 href={`/courses/${course.id}`}
-                className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm font-medium"
+                className="inline-flex items-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900"
               >
                 查看詳情
               </Link>

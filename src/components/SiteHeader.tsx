@@ -21,7 +21,7 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full border border-slate-200 px-3 py-1.5 transition hover:bg-slate-900 hover:text-white"
+              className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-slate-900 transition hover:bg-slate-900 hover:text-white"
             >
               {item.label}
             </Link>
@@ -30,7 +30,7 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full bg-slate-900 px-3 py-1.5 text-white transition hover:bg-slate-700"
+              className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 font-medium text-white transition hover:bg-slate-700"
             >
               {item.label}
             </Link>
