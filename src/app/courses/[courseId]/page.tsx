@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import { getCourseById, listOneOnOneSlots, listSessionClassDates, listSessions } from "@/lib/firestoreService";
 import { getCourseDetailContent } from "@/lib/courseContent";
@@ -47,37 +48,79 @@ function getSessionClassDates(session: Session): string[] {
   return dates.length > 0 ? dates : firstDate ? [firstDate] : [];
 }
 
-export default function CourseDetailPage({ params }: { params: { courseId: string } }) {
+export default function CourseDetailPage() {
+  const params = useParams();
+  const routeCourseId = Array.isArray(params.courseId) ? params.courseId[0] : params.courseId;
+  const courseId = typeof routeCourseId === "string" ? routeCourseId : "";
   const [course, setCourse] = useState<Course | null>(null);
   const [terms, setTerms] = useState<(Session | OneOnOneSlot)[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
-      const foundCourse = await getCourseById(params.courseId);
-      if (!foundCourse) {
-        setCourse(null);
-        setTerms([]);
+      setIsLoading(true);
+      setNotFound(false);
+      setErrorMessage(null);
+      setCourse(null);
+      setTerms([]);
+
+      if (!courseId) {
+        setNotFound(true);
+        setIsLoading(false);
         return;
       }
 
-      setCourse(foundCourse);
+      try {
+        const foundCourse = await getCourseById(courseId);
+        if (!foundCourse) {
+          setNotFound(true);
+          return;
+        }
 
-      if (foundCourse.type === "group") {
-        const sessions = (await listSessions(foundCourse.id)).filter(isSessionSelectable);
-        setTerms(sessions);
-      } else {
-        const slots = (await listOneOnOneSlots()).filter((slot) => slot.isOpen !== false && !slot.isBooked);
-        setTerms(slots);
+        setCourse(foundCourse);
+
+        if (foundCourse.type === "group") {
+          const sessions = (await listSessions(foundCourse.id)).filter(isSessionSelectable);
+          setTerms(sessions);
+        } else {
+          const slots = (await listOneOnOneSlots()).filter((slot) => slot.isOpen !== false && !slot.isBooked);
+          setTerms(slots);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[CourseDetailPage] failed to load course", error instanceof Error ? error.message : error);
+        }
+        setErrorMessage("課程資料讀取失敗，請稍後再試");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    init();
-  }, [params.courseId]);
+    void init();
+  }, [courseId]);
 
-  if (!course) {
+  if (isLoading) {
+    return <section className="card max-w-2xl">課程資料讀取中...</section>;
+  }
+
+  if (errorMessage) {
     return (
       <section className="card max-w-2xl space-y-3">
-        <h1 className="text-2xl font-bold">找不到課程：{params.courseId}</h1>
+        <h1 className="text-2xl font-bold">課程資料讀取失敗</h1>
+        <p className="text-sm text-slate-600">{errorMessage}</p>
+        <Link href="/courses" className="inline-flex rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-900">
+          回到課程列表
+        </Link>
+      </section>
+    );
+  }
+
+  if (notFound || !course) {
+    return (
+      <section className="card max-w-2xl space-y-3">
+        <h1 className="text-2xl font-bold">找不到課程：{courseId || "-"}</h1>
         <p className="text-sm text-slate-600">請回課程列表確認課程 id / slug。</p>
         <Link href="/courses" className="inline-flex rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-900">
           回到課程列表

@@ -84,7 +84,9 @@ function buildSessionSlotInfo(session: Session): SlotInfo {
 
 export default function BookingPage() {
   const router = useRouter();
-  const params = useParams<{ courseId: string }>();
+  const params = useParams();
+  const routeCourseId = Array.isArray(params.courseId) ? params.courseId[0] : params.courseId;
+  const courseId = typeof routeCourseId === "string" ? routeCourseId : "";
   const [course, setCourse] = useState<Course | null>(null);
   const [slots, setSlots] = useState<SlotInfo[]>([]);
   const [name, setName] = useState("");
@@ -93,42 +95,64 @@ export default function BookingPage() {
   const [isMember, setIsMember] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isLoadingCourse, setIsLoadingCourse] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const init = async () => {
-      const foundCourse = await getCourseById(params.courseId);
-      if (!foundCourse) {
-        setCourse(null);
-        setSlots([]);
+      setIsLoadingCourse(true);
+      setNotFound(false);
+      setError("");
+      setCourse(null);
+      setSlots([]);
+
+      if (!courseId) {
+        setNotFound(true);
+        setIsLoadingCourse(false);
         return;
       }
-      setCourse(foundCourse);
 
-      if (foundCourse.type === "group") {
-        const sessions = await listSessions(foundCourse.id);
-        setSlots(
-          sessions
-            .map(buildSessionSlotInfo)
-            .sort((a, b) => Number(a.disabled) - Number(b.disabled) || a.title.localeCompare(b.title, "zh-TW")),
-        );
-      } else {
-        const list = await listOneOnOneSlots();
-        setSlots(
-          list.map((slot: OneOnOneSlot) => ({
-            id: slot.id,
-            title: `${slot.date} ${slot.startTime}-${slot.endTime}` +
-              (slot.isBooked ? "（已預約）" : "") +
-              (slot.isOpen === false ? "（已關閉）" : ""),
-            disabled: slot.isBooked || slot.isOpen === false,
-            classDates: [],
-          })),
-        );
+      try {
+        const foundCourse = await getCourseById(courseId);
+        if (!foundCourse) {
+          setNotFound(true);
+          return;
+        }
+        setCourse(foundCourse);
+
+        if (foundCourse.type === "group") {
+          const sessions = await listSessions(foundCourse.id);
+          setSlots(
+            sessions
+              .map(buildSessionSlotInfo)
+              .sort((a, b) => Number(a.disabled) - Number(b.disabled) || a.title.localeCompare(b.title, "zh-TW")),
+          );
+        } else {
+          const list = await listOneOnOneSlots();
+          setSlots(
+            list.map((slot: OneOnOneSlot) => ({
+              id: slot.id,
+              title: `${slot.date} ${slot.startTime}-${slot.endTime}` +
+                (slot.isBooked ? "（已預約）" : "") +
+                (slot.isOpen === false ? "（已關閉）" : ""),
+              disabled: slot.isBooked || slot.isOpen === false,
+              classDates: [],
+            })),
+          );
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[BookingPage] failed to load course", err instanceof Error ? err.message : err);
+        }
+        setError("課程資料讀取失敗，請稍後再試");
+      } finally {
+        setIsLoadingCourse(false);
       }
     };
 
-    init();
-  }, [params.courseId]);
+    void init();
+  }, [courseId]);
 
   const amount = course
     ? course.type === "oneOnOne"
@@ -166,8 +190,32 @@ export default function BookingPage() {
     }
   };
 
-  if (!course) {
-    return <div className="card">課程不存在。</div>;
+  if (isLoadingCourse) {
+    return <div className="card">課程資料讀取中...</div>;
+  }
+
+  if (error && !course) {
+    return (
+      <section className="card max-w-2xl space-y-3">
+        <h1 className="text-2xl font-bold">課程資料讀取失敗</h1>
+        <p className="text-sm text-slate-600">{error}</p>
+        <Link href="/courses" className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm">
+          回到課程列表
+        </Link>
+      </section>
+    );
+  }
+
+  if (notFound || !course) {
+    return (
+      <section className="card max-w-2xl space-y-3">
+        <h1 className="text-2xl font-bold">找不到課程：{courseId || "-"}</h1>
+        <p className="text-sm text-slate-600">請回課程列表確認課程 id / slug。</p>
+        <Link href="/courses" className="inline-block rounded-full border border-slate-300 px-4 py-2 text-sm">
+          回到課程列表
+        </Link>
+      </section>
+    );
   }
 
   return (
