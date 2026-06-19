@@ -126,9 +126,11 @@ export default function AdminCoursesPage() {
   };
 
   const startEdit = (course: Course) => {
+    const displayName = course.name || (course as Course & { title?: string }).title || "";
+    const displayType = course.type || (course as Course & { courseType?: CourseType }).courseType || "group";
     setForm({
       id: course.id,
-      name: course.name,
+      name: displayName,
       slug: course.slug,
       description: course.description,
       memberPrice: String(course.memberPrice),
@@ -137,7 +139,7 @@ export default function AdminCoursesPage() {
       sessionsCount: String(course.sessionsCount || (course.type === "oneOnOne" ? 1 : 4)),
       maxCapacity: String(course.maxCapacity || 18),
       timeSlots: (course.timeSlots || []).join(","),
-      type: course.type,
+      type: displayType,
       isActive: course.isActive !== false,
       pricePerHour: String(course.pricePerHour || course.memberPrice || ""),
     });
@@ -354,7 +356,7 @@ export default function AdminCoursesPage() {
             className="card flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between"
           >
             <div className="space-y-1">
-              <h2 className="font-semibold">{course.name}</h2>
+              <h2 className="font-semibold">{course.name || (course as Course & { title?: string }).title || ""}</h2>
               <p className="text-sm text-slate-600">
                 會員價：NT$ {course.memberPrice} / 非會員價：NT$ {course.nonMemberPrice}
               </p>

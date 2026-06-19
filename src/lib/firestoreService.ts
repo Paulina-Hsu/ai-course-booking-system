@@ -19,6 +19,7 @@ import {
   Booking,
   BookingStatus,
   Course,
+  CourseType,
   OneOnOneSlot,
   Session,
 } from "./firestoreTypes";
@@ -88,14 +89,31 @@ function cleanPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(entries);
 }
 
+type LegacyCourseRecord = Course & {
+  title?: string;
+  courseType?: CourseType;
+};
+
+function normalizeCourseRecord(record: LegacyCourseRecord): Course {
+  return {
+    ...record,
+    name: record.name || record.title || "",
+    type: record.type || record.courseType || "group",
+  };
+}
+
 export async function listCourses(includeInactive = false): Promise<Course[]> {
   if (!isFirebaseReady) return [] as Course[];
   const firestore = ensureDb();
   const snapshot = await getDocs(collection(firestore, "courses"));
   return snapshot.docs
-    .map((docRef) => mapDoc<Course>(docRef))
+    .map((docRef) => normalizeCourseRecord(mapDoc<LegacyCourseRecord>(docRef)))
     .filter((course) => includeInactive || course.isActive !== false)
-    .sort((a, b) => a.name.localeCompare(b.name, "zh-TW"));
+    .sort((a, b) => {
+      const nameA = a.name || (a as LegacyCourseRecord).title || "";
+      const nameB = b.name || (b as LegacyCourseRecord).title || "";
+      return nameA.localeCompare(nameB, "zh-TW");
+    });
 }
 
 export async function getCourseById(courseId: string): Promise<Course | null> {
