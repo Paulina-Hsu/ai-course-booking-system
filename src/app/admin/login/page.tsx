@@ -1,9 +1,21 @@
 ﻿"use client";
 
 import { FormEvent, useState } from "react";
+import { FirebaseError } from "firebase/app";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth, isFirebaseReady } from "@/lib/firebase";
+
+const AUTH_ERROR_LABELS: Record<string, string> = {
+  "auth/invalid-credential": "帳號或密碼不正確（請確認 Email 與密碼）",
+  "auth/user-not-found": "找不到此使用者，請確認 Email 是否正確",
+  "auth/wrong-password": "密碼錯誤，請重新輸入",
+  "auth/invalid-email": "Email 格式不正確",
+  "auth/too-many-requests": "嘗試次數過多，請稍後再試",
+  "auth/network-request-failed": "網路連線異常，請稍後再試",
+  "auth/api-key-not-valid": "Firebase API key 無效，請檢查 Firebase 設定",
+  "auth/operation-not-allowed": "此登入方式目前未啟用（請確認 Firebase Console 已開啟 Email/Password）",
+};
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -23,8 +35,13 @@ export default function AdminLoginPage() {
       setIsLoading(true);
       await signInWithEmailAndPassword(auth, email, password);
       router.push("/admin/dashboard");
-    } catch {
-      setMessage("登入失敗，請確認帳號、密碼");
+    } catch (error) {
+      const code = error instanceof FirebaseError ? error.code : "unknown";
+      const message = error instanceof FirebaseError ? error.message : "登入時發生未預期錯誤";
+
+      console.log("Firebase Auth login error", { code, message });
+
+      setMessage(`登入失敗（${code}）：${AUTH_ERROR_LABELS[code] || message}`);
     } finally {
       setIsLoading(false);
     }
