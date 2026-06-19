@@ -18,13 +18,15 @@ import { isFirebaseReady, db } from "./firebase";
 import {
   Booking,
   BookingStatus,
+  ContactPreference,
   Course,
   CourseType,
   OneOnOneSlot,
   Session,
 } from "./firestoreTypes";
 
-const ACTIVE_BOOKING_STATUSES: BookingStatus[] = ["pending", "confirmed", "paid", "waitlist"];
+const DUPLICATE_BOOKING_STATUSES: BookingStatus[] = ["pending", "confirmed", "paid", "waitlist"];
+const CAPACITY_COUNTED_BOOKING_STATUSES: BookingStatus[] = ["pending", "confirmed", "paid"];
 const DEFAULT_SESSION_CAPACITY = 18;
 const DEFAULT_ONE_ON_ONE_DURATION_MINUTES = 60;
 
@@ -89,6 +91,10 @@ function buildClassDates(firstClassDate: string, startTime: string, count = 4): 
 function isSessionOpen(session: Session): boolean {
   if (session.isOpen === false) return false;
   return true;
+}
+
+function doesStatusUseCapacity(status: BookingStatus): boolean {
+  return CAPACITY_COUNTED_BOOKING_STATUSES.includes(status);
 }
 
 function getSessionCapacity(session: Session): number {
@@ -591,6 +597,11 @@ export interface CreateBookingInput {
   name: string;
   phone: string;
   email?: string;
+  lineId?: string;
+  contactPreference?: ContactPreference;
+  ageRange?: string;
+  aiLevel?: string;
+  learningGoal?: string;
   isMember: boolean;
   sessionId?: string;
   oneOnOneSlotId?: string;
@@ -620,7 +631,7 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
         collection(firestore, "bookings"),
         where("sessionId", "==", input.sessionId),
         where("phone", "==", normalizedPhone),
-        where("status", "in", ACTIVE_BOOKING_STATUSES),
+        where("status", "in", DUPLICATE_BOOKING_STATUSES),
       ),
     );
 
@@ -658,7 +669,12 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
         sessionId: input.sessionId,
         name: input.name,
         phone: normalizedPhone,
-        email: input.email,
+        email: input.email?.trim(),
+        lineId: input.lineId?.trim() || undefined,
+        contactPreference: input.contactPreference,
+        ageRange: input.ageRange,
+        aiLevel: input.aiLevel,
+        learningGoal: input.learningGoal?.trim() || undefined,
         isMember: input.isMember,
         amount,
         note: input.note,
@@ -678,7 +694,7 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
         collection(firestore, "bookings"),
         where("oneOnOneSlotId", "==", oneOnOneSlotId),
         where("phone", "==", normalizedPhone),
-        where("status", "in", ACTIVE_BOOKING_STATUSES),
+        where("status", "in", DUPLICATE_BOOKING_STATUSES),
       ),
     );
 
@@ -709,7 +725,12 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
         oneOnOneSlotId,
         name: input.name,
         phone: normalizedPhone,
-        email: input.email,
+        email: input.email?.trim(),
+        lineId: input.lineId?.trim() || undefined,
+        contactPreference: input.contactPreference,
+        ageRange: input.ageRange,
+        aiLevel: input.aiLevel,
+        learningGoal: input.learningGoal?.trim() || undefined,
         isMember: input.isMember,
         amount,
         note: input.note,
@@ -741,19 +762,32 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
     if (!fresh.exists()) throw new Error("找不到報名資料");
 
     const booking = fresh.data() as Booking;
-    const releaseCapacity = booking.status !== "cancelled" && nextStatus === "cancelled";
-    const reclaimCapacity = booking.status === "cancelled" && nextStatus !== "cancelled";
+    const currentStatus = booking.status;
+    const wasUsingCapacity = doesStatusUseCapacity(currentStatus);
+    let finalStatus = nextStatus;
+    let willUseCapacity = doesStatusUseCapacity(nextStatus);
 
-    if (booking.sessionId && (releaseCapacity || reclaimCapacity)) {
+    if (booking.sessionId && wasUsingCapacity !== willUseCapacity) {
       const sessionRef = doc(firestore, "sessions", booking.sessionId);
       const sessionSnap = await tx.get(sessionRef);
+
       if (sessionSnap.exists()) {
         const session = sessionSnap.data() as Session;
         const capacity = getSessionCapacity(session);
         let enrolledCount = Number(session.enrolledCount || 0);
 
-        if (releaseCapacity && enrolledCount > 0) enrolledCount -= 1;
-        if (reclaimCapacity && enrolledCount < capacity) enrolledCount += 1;
+        if (wasUsingCapacity && !willUseCapacity) {
+          enrolledCount = Math.max(enrolledCount - 1, 0);
+        }
+
+        if (!wasUsingCapacity && willUseCapacity) {
+          if (enrolledCount >= capacity) {
+            finalStatus = "waitlist";
+            willUseCapacity = false;
+          } else {
+            enrolledCount += 1;
+          }
+        }
 
         tx.update(sessionRef, cleanPayload({
           enrolledCount,
@@ -765,20 +799,23 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
       }
     }
 
-    if (booking.oneOnOneSlotId && (releaseCapacity || reclaimCapacity)) {
+    if (booking.oneOnOneSlotId && wasUsingCapacity !== willUseCapacity) {
       const slotRef = doc(firestore, "oneOnOneSlots", booking.oneOnOneSlotId);
       const slotSnap = await tx.get(slotRef);
+
       if (slotSnap.exists()) {
         const slot = slotSnap.data() as OneOnOneSlot;
 
-        if (releaseCapacity) {
+        if (wasUsingCapacity && !willUseCapacity) {
           tx.update(slotRef, cleanPayload({
             isBooked: false,
             studentPhone: null,
             bookingId: null,
             updatedAt: serverTimestamp(),
           }));
-        } else if (reclaimCapacity) {
+        }
+
+        if (!wasUsingCapacity && willUseCapacity) {
           if (slot.isBooked && slot.bookingId !== bookingId) {
             throw new Error("此時段已被其他學員佔用");
           }
@@ -798,12 +835,11 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
     }
 
     tx.update(bookingRef, cleanPayload({
-      status: nextStatus,
+      status: finalStatus,
       updatedAt: serverTimestamp(),
     }));
   });
 }
-
 export async function getBookingCounts() {
   const bookings = await listBookings();
   return bookings.reduce(
@@ -839,3 +875,5 @@ export const listSessionClassDates = (session: Session): string[] => {
   const fallbackDate = toDateInputValue(session.startDate);
   return fallbackDate ? [fallbackDate] : [];
 };
+
+

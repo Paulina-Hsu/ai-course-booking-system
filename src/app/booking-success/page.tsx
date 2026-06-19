@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { BOOKING_STATUS_OPTIONS, Booking } from "@/lib/firestoreTypes";
+import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference } from "@/lib/firestoreTypes";
 import {
   formatSessionLabel,
   getBookingById,
@@ -19,9 +19,18 @@ interface BookingSuccessDetails {
 }
 
 const statusMap = Object.fromEntries(BOOKING_STATUS_OPTIONS.map((item) => [item.value, item.label]));
+const contactPreferenceMap: Record<ContactPreference, string> = {
+  phone: "手機",
+  email: "Email",
+  line: "LINE",
+};
 
 function formatCurrency(value: number) {
   return `NT$ ${new Intl.NumberFormat("zh-TW").format(value)}`;
+}
+
+function displayValue(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value : "未填寫";
 }
 
 function BookingSuccessContent() {
@@ -34,7 +43,7 @@ function BookingSuccessContent() {
   useEffect(() => {
     const load = async () => {
       if (!bookingId) {
-        setError("找不到訂單編號，請回到課程列表重新確認報名結果。");
+        setError("找不到訂單編號，請回到課程列表重新報名或聯絡管理員。");
         setLoading(false);
         return;
       }
@@ -42,7 +51,7 @@ function BookingSuccessContent() {
       try {
         const booking = await getBookingById(bookingId);
         if (!booking) {
-          setError("找不到這筆報名資料，請確認訂單編號是否正確。");
+          setError("找不到報名資料，請確認訂單編號是否正確，或聯絡管理員協助查詢。");
           setLoading(false);
           return;
         }
@@ -56,16 +65,19 @@ function BookingSuccessContent() {
         const sessionLabel = session
           ? formatSessionLabel(session)
           : slot
-            ? `1 對 1 預約｜${slot.date.replaceAll("-", "/")} 起｜${slot.startTime}-${slot.endTime}`
-            : "未找到期別資料";
+            ? `1 對 1 預約｜${slot.date.replaceAll("-", "/")}｜${slot.startTime}-${slot.endTime}`
+            : "未設定期別或時段";
 
         setDetails({
           booking,
           courseName: course?.name || booking.courseId,
           sessionLabel,
         });
-      } catch {
-        setError("報名已送出，但讀取報名明細時發生問題。請稍後到後台或以訂單編號查詢。");
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[BookingSuccess] failed to load booking", err instanceof Error ? err.message : err);
+        }
+        setError("報名資料讀取失敗，請稍後再試，或聯絡管理員協助確認報名狀態。");
       } finally {
         setLoading(false);
       }
@@ -77,9 +89,9 @@ function BookingSuccessContent() {
   return (
     <section className="card max-w-2xl">
       <h1 className="text-2xl font-bold text-green-700">報名成功</h1>
-      <p className="mt-2 text-sm text-slate-600">報名資料已送出，狀態預設為「待確認」。</p>
+      <p className="mt-2 text-sm text-slate-600">我們已收到你的報名資料，管理員確認後會再與你聯繫。</p>
 
-      {loading ? <p className="mt-4 text-sm text-slate-600">讀取報名明細中...</p> : null}
+      {loading ? <p className="mt-4 text-sm text-slate-600">讀取報名資料中...</p> : null}
       {error ? <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">{error}</p> : null}
 
       {details ? (
@@ -87,9 +99,14 @@ function BookingSuccessContent() {
           <p>訂單編號：{details.booking.id}</p>
           <p>姓名：{details.booking.name}</p>
           <p>手機：{details.booking.phone}</p>
-          <p>Email：{details.booking.email || "未填寫"}</p>
+          <p>Email：{displayValue(details.booking.email)}</p>
+          <p>LINE ID：{displayValue(details.booking.lineId)}</p>
+          <p>希望聯絡方式：{details.booking.contactPreference ? contactPreferenceMap[details.booking.contactPreference] : "未填寫"}</p>
+          <p>年齡區間：{displayValue(details.booking.ageRange)}</p>
+          <p>AI 使用程度：{displayValue(details.booking.aiLevel)}</p>
+          <p>學習需求或備註：{displayValue(details.booking.learningGoal)}</p>
           <p>課程：{details.courseName}</p>
-          <p>期別：{details.sessionLabel}</p>
+          <p>期別 / 時段：{details.sessionLabel}</p>
           <p>會員：{details.booking.isMember ? "是" : "否"}</p>
           <p>金額：{formatCurrency(details.booking.amount)}</p>
           <p>狀態：{statusMap[details.booking.status] || "待確認"}</p>
@@ -109,7 +126,7 @@ function BookingSuccessContent() {
 
 export default function BookingSuccessPage() {
   return (
-    <Suspense fallback={<section className="card max-w-2xl">讀取報名明細中...</section>}>
+    <Suspense fallback={<section className="card max-w-2xl">讀取報名資料中...</section>}>
       <BookingSuccessContent />
     </Suspense>
   );

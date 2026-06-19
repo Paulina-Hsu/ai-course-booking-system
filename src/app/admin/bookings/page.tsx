@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { BOOKING_STATUS_OPTIONS, Booking, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
+import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   formatSessionLabel,
   listBookings,
@@ -15,6 +15,11 @@ import {
 import { BookingStatus } from "@/lib/firestoreTypes";
 
 const statusMap = Object.fromEntries(BOOKING_STATUS_OPTIONS.map((item) => [item.value, item.label]));
+const contactPreferenceMap: Record<ContactPreference, string> = {
+  phone: "手機",
+  email: "Email",
+  line: "LINE",
+};
 
 function buildCsv(rows: string[][], headers: string[]) {
   const escapeCsv = (value: string) => `"${value.replaceAll("\"", "\"\"")}"`;
@@ -38,6 +43,14 @@ function getSessionClassDatesText(session?: Session) {
     .join("\n");
 }
 
+function displayValue(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value : "未填寫";
+}
+
+function displayContactPreference(value?: ContactPreference): string {
+  return value ? contactPreferenceMap[value] || value : "未填寫";
+}
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<(Booking & { id: string })[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -47,6 +60,7 @@ export default function AdminBookingsPage() {
   const [filterSessionId, setFilterSessionId] = useState("");
   const [filterStatus, setFilterStatus] = useState<BookingStatus | "">("");
   const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState("");
 
   const courseMap = useMemo(
     () => Object.fromEntries(courses.map((course) => [course.id, course.name])),
@@ -91,10 +105,31 @@ export default function AdminBookingsPage() {
   }, [load]);
 
   const onExportCsv = () => {
-    const headers = ["姓名", "手機", "課程", "期別", "狀態", "金額", "會員", "Email", "建立時間"];
+    const headers = [
+      "姓名",
+      "手機",
+      "Email",
+      "LINE ID",
+      "希望聯絡方式",
+      "年齡區間",
+      "AI 使用程度",
+      "學習需求或備註",
+      "課程",
+      "期別",
+      "狀態",
+      "金額",
+      "會員",
+      "建立時間",
+    ];
     const rows = bookings.map((booking) => [
       booking.name,
       booking.phone,
+      booking.email || "",
+      booking.lineId || "",
+      displayContactPreference(booking.contactPreference),
+      booking.ageRange || "",
+      booking.aiLevel || "",
+      booking.learningGoal || "",
       courseMap[booking.courseId] || booking.courseId,
       booking.sessionId
         ? sessionMap[booking.sessionId] || ""
@@ -104,7 +139,6 @@ export default function AdminBookingsPage() {
       statusMap[booking.status] || booking.status,
       `${booking.amount}`,
       booking.isMember ? "是" : "否",
-      booking.email || "",
       String((booking.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || ""),
     ]);
 
@@ -118,8 +152,13 @@ export default function AdminBookingsPage() {
   };
 
   const onStatusChange = async (bookingId: string, status: BookingStatus) => {
-    await updateBookingStatus(bookingId, status);
-    await load();
+    try {
+      setActionError("");
+      await updateBookingStatus(bookingId, status);
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "狀態更新失敗");
+    }
   };
 
   return (
@@ -130,6 +169,8 @@ export default function AdminBookingsPage() {
           匯出 CSV
         </button>
       </div>
+
+      {actionError ? <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{actionError}</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <select
@@ -182,11 +223,17 @@ export default function AdminBookingsPage() {
       {loading ? <p>讀取中...</p> : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] table-fixed border border-slate-200 bg-white text-sm">
+        <table className="w-full min-w-[1500px] table-fixed border border-slate-200 bg-white text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
               <th className="border border-slate-200 px-3 py-2">學員</th>
               <th className="border border-slate-200 px-3 py-2">手機</th>
+              <th className="border border-slate-200 px-3 py-2">Email</th>
+              <th className="border border-slate-200 px-3 py-2">LINE ID</th>
+              <th className="border border-slate-200 px-3 py-2">聯絡方式</th>
+              <th className="border border-slate-200 px-3 py-2">年齡</th>
+              <th className="border border-slate-200 px-3 py-2">AI 程度</th>
+              <th className="border border-slate-200 px-3 py-2">備註</th>
               <th className="border border-slate-200 px-3 py-2">課程</th>
               <th className="border border-slate-200 px-3 py-2">期別</th>
               <th className="border border-slate-200 px-3 py-2">金額</th>
@@ -198,6 +245,12 @@ export default function AdminBookingsPage() {
               <tr key={booking.id}>
                 <td className="border border-slate-200 px-3 py-2">{booking.name}</td>
                 <td className="border border-slate-200 px-3 py-2">{booking.phone}</td>
+                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.email)}</td>
+                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.lineId)}</td>
+                <td className="border border-slate-200 px-3 py-2">{displayContactPreference(booking.contactPreference)}</td>
+                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.ageRange)}</td>
+                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.aiLevel)}</td>
+                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.learningGoal)}</td>
                 <td className="border border-slate-200 px-3 py-2">{courseMap[booking.courseId] || booking.courseId}</td>
                 <td className="border border-slate-200 px-3 py-2">
                   <span title={booking.sessionId ? sessionClassDatesMap[booking.sessionId] || undefined : undefined}>

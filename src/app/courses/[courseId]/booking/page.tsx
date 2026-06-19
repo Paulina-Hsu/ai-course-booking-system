@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
+import { ContactPreference, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   createBooking,
   getCourseById,
@@ -18,6 +18,32 @@ interface SlotInfo {
   disabled: boolean;
   classDates: string[];
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const contactPreferenceOptions: { value: ContactPreference; label: string }[] = [
+  { value: "phone", label: "手機" },
+  { value: "email", label: "Email" },
+  { value: "line", label: "LINE" },
+];
+
+const ageRangeOptions = [
+  "18 歲以下",
+  "18–25 歲",
+  "26–35 歲",
+  "36–45 歲",
+  "46–55 歲",
+  "56–65 歲",
+  "66 歲以上",
+];
+
+const aiLevelOptions = [
+  "完全沒用過",
+  "用過一點，但不熟",
+  "會基本操作",
+  "已經常使用，想進階",
+  "想針對工作 / 創作 / 教學深入應用",
+];
 
 function getSessionCapacity(session: Session): number {
   if (typeof session.capacity === "number" && Number.isFinite(session.capacity)) return session.capacity;
@@ -92,6 +118,11 @@ export default function BookingPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [lineId, setLineId] = useState("");
+  const [contactPreference, setContactPreference] = useState<ContactPreference>("phone");
+  const [ageRange, setAgeRange] = useState("");
+  const [aiLevel, setAiLevel] = useState("");
+  const [learningGoal, setLearningGoal] = useState("");
   const [isMember, setIsMember] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [loading, setLoading] = useState(false);
@@ -170,19 +201,48 @@ export default function BookingPage() {
       setError("請選擇一期別或時段");
       return;
     }
+    if (!EMAIL_PATTERN.test(email.trim())) {
+      setError("請輸入有效的 Email");
+      return;
+    }
+    if (contactPreference === "line" && !lineId.trim()) {
+      setError("希望聯絡方式選擇 LINE 時，請填寫 LINE ID");
+      return;
+    }
+    if (!ageRange) {
+      setError("請選擇年齡區間");
+      return;
+    }
+    if (!aiLevel) {
+      setError("請選擇目前 AI 使用程度");
+      return;
+    }
 
     try {
       setLoading(true);
       setError("");
 
+      const sharedBookingFields = {
+        courseId: course.id,
+        name: name.trim(),
+        phone,
+        email: email.trim(),
+        lineId: lineId.trim() || undefined,
+        contactPreference,
+        ageRange,
+        aiLevel,
+        learningGoal: learningGoal.trim() || undefined,
+        isMember,
+      };
+
       const bookingId = await createBooking(
         course.type === "group"
-          ? { courseId: course.id, name, phone, email, isMember, sessionId: selectedSlot }
-          : { courseId: course.id, name, phone, email, isMember, oneOnOneSlotId: selectedSlot },
+          ? { ...sharedBookingFields, sessionId: selectedSlot }
+          : { ...sharedBookingFields, oneOnOneSlotId: selectedSlot },
       );
 
       router.push(
-        `/booking-success?bookingId=${encodeURIComponent(bookingId)}&course=${encodeURIComponent(course.name)}&name=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}&email=${encodeURIComponent(email)}&isMember=${isMember ? "是" : "否"}&price=${amount}`,
+        `/booking-success?bookingId=${encodeURIComponent(bookingId)}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "報名失敗");
@@ -244,14 +304,77 @@ export default function BookingPage() {
           />
         </label>
 
-        <label className="flex flex-col gap-2 text-sm md:col-span-2">
+        <label className="flex flex-col gap-2 text-sm">
           Email
           <input
+            required
             type="email"
             className="rounded-lg border border-slate-300 px-3 py-2"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            placeholder="student@example.com"
           />
+        </label>
+
+        <label className="flex flex-col gap-2 text-sm">
+          LINE ID
+          <input
+            required={contactPreference === "line"}
+            className="rounded-lg border border-slate-300 px-3 py-2"
+            value={lineId}
+            onChange={(event) => setLineId(event.target.value)}
+            placeholder="選填；選 LINE 聯絡時必填"
+          />
+        </label>
+
+        <label className="flex flex-col gap-2 text-sm">
+          希望聯絡方式
+          <select
+            required
+            value={contactPreference}
+            onChange={(event) => setContactPreference(event.target.value as ContactPreference)}
+            className="rounded-lg border border-slate-300 px-3 py-2"
+          >
+            {contactPreferenceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-2 text-sm">
+          年齡區間
+          <select
+            required
+            value={ageRange}
+            onChange={(event) => setAgeRange(event.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2"
+          >
+            <option value="">請選擇</option>
+            {ageRangeOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-2 text-sm md:col-span-2">
+          目前 AI 使用程度
+          <select
+            required
+            value={aiLevel}
+            onChange={(event) => setAiLevel(event.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-2"
+          >
+            <option value="">請選擇</option>
+            {aiLevelOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="flex flex-col gap-2 text-sm">
@@ -295,6 +418,16 @@ export default function BookingPage() {
             </ul>
           </div>
         ) : null}
+
+        <label className="flex flex-col gap-2 text-sm md:col-span-2">
+          想學習的方向或備註
+          <textarea
+            className="min-h-28 rounded-lg border border-slate-300 px-3 py-2"
+            value={learningGoal}
+            onChange={(event) => setLearningGoal(event.target.value)}
+            placeholder="可填寫想解決的問題、學習目標或其他備註"
+          />
+        </label>
 
         <p className="md:col-span-2 text-sm">預估費用：NT$ {amount}</p>
 

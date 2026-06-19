@@ -1,5 +1,7 @@
 ﻿export type BookingStatus = "pending" | "confirmed" | "paid" | "cancelled" | "waitlist";
 
+export type ContactPreference = "phone" | "email" | "line";
+
 export type CourseType = "group" | "oneOnOne";
 
 export type SessionStatus = "open" | "closed";
@@ -82,6 +84,11 @@ export interface Booking extends FirestoreMeta {
   name: string;
   phone: string;
   email?: string;
+  lineId?: string;
+  contactPreference?: ContactPreference;
+  ageRange?: string;
+  aiLevel?: string;
+  learningGoal?: string;
   isMember: boolean;
   amount: number;
   status: BookingStatus;
@@ -114,3 +121,5 @@ export const COURSE_TYPE_OPTIONS: { value: CourseType; label: string }[] = [
   { value: "group", label: "團體班" },
   { value: "oneOnOne", label: "1對1" },
 ];
+
+
