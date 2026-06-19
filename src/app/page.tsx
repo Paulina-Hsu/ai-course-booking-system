@@ -43,14 +43,29 @@ export default function HomePage() {
 
       <div className="card">
         <h2 className="mb-3 text-lg font-semibold">規格摘要</h2>
-        <ul className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-          <li>團課每堂 2 小時</li>
-          <li>團課時段：10:00-12:00、14:00-16:00</li>
-          <li>1 對 1 時段：08:30-09:30</li>
-          <li>每班上限 18 人</li>
-          <li>每期固定 4 週（4 堂）</li>
-          <li>支援會員價與非會員價</li>
-        </ul>
+        <div className="grid gap-5 md:grid-cols-2">
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="mb-3 text-base font-semibold text-slate-900">團班課程</h3>
+            <ul className="space-y-2 text-sm text-slate-700">
+              <li>每堂 2 小時</li>
+              <li>時段：10:00-12:00、14:00-16:00</li>
+              <li>每期固定 4 週，共 4 堂</li>
+              <li>每班上限 18 人</li>
+              <li>支援會員價與非會員價</li>
+            </ul>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="mb-3 text-base font-semibold text-slate-900">1 對 1 專屬 AI 課程</h3>
+            <ul className="space-y-2 text-sm text-slate-700">
+              <li>每次 1 小時</li>
+              <li>固定時段：08:30-09:30</li>
+              <li>價格：NT$1,600 / 小時</li>
+              <li>依後台開放日期預約</li>
+              <li>不分會員與非會員價</li>
+            </ul>
+          </section>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
