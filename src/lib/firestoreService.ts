@@ -126,8 +126,35 @@ function toFiniteNumber(value: unknown, fallback = 0): number {
   return typeof numericValue === "number" && Number.isFinite(numericValue) ? numericValue : fallback;
 }
 
+function normalizeText(value: unknown): string {
+  return typeof value === "string" ? value.toLowerCase().replace(/\s+/g, "") : "";
+}
+
+function resolveCourseType(record: LegacyCourseRecord): CourseType {
+  const rawType = normalizeText(record.type);
+  const rawCourseType = normalizeText(record.courseType);
+  const slug = normalizeText(record.slug || record.legacyId || record.id);
+  const name = normalizeText(record.name || record.title);
+  const combined = `${rawType} ${rawCourseType} ${slug} ${name}`;
+  const isOneOnOne =
+    rawType === "oneonone" ||
+    rawType === "one-on-one" ||
+    rawType === "1對1" ||
+    rawCourseType === "oneonone" ||
+    rawCourseType === "one-on-one" ||
+    rawCourseType === "1對1" ||
+    combined.includes("oneonone") ||
+    combined.includes("one-on-one") ||
+    combined.includes("1對1") ||
+    combined.includes("1對一") ||
+    combined.includes("一對一") ||
+    combined.includes("專屬ai課程");
+
+  return isOneOnOne ? "oneOnOne" : "group";
+}
+
 function normalizeCourseRecord(record: LegacyCourseRecord): Course {
-  const type = record.type || record.courseType || "group";
+  const type = resolveCourseType(record);
   const defaultTimeSlots = type === "oneOnOne" ? ["08:30-09:30"] : ["10:00-12:00", "14:00-16:00"];
   const timeSlots = Array.isArray(record.timeSlots)
     ? record.timeSlots
@@ -193,30 +220,20 @@ export async function listCourses(includeInactive = false): Promise<Course[]> {
 export async function getCourseById(courseId: string): Promise<Course | null> {
   if (!isFirebaseReady) return null;
   const firestore = ensureDb();
-  const isDevelopment = process.env.NODE_ENV !== "production";
-  const logSafeLookup = (payload: Record<string, unknown>) => {
-    if (isDevelopment) {
-      console.log("[getCourseById]", payload);
-    }
-  };
 
   const snap = await getDoc(doc(firestore, "courses", courseId));
-  logSafeLookup({ courseId, documentIdFound: snap.exists() });
   if (snap.exists()) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(snap));
 
   const slugSnapshot = await getDocs(query(collection(firestore, "courses"), where("slug", "==", courseId)));
   const slugMatch = slugSnapshot.docs[0];
-  logSafeLookup({ courseId, slugFound: Boolean(slugMatch) });
   if (slugMatch) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(slugMatch));
 
   const legacyIdSnapshot = await getDocs(query(collection(firestore, "courses"), where("id", "==", courseId)));
   const legacyIdMatch = legacyIdSnapshot.docs[0];
-  logSafeLookup({ courseId, legacyIdFound: Boolean(legacyIdMatch) });
   if (legacyIdMatch) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(legacyIdMatch));
 
   const courses = await listCourses(true);
   const normalizedMatch = courses.find((course) => course.id === courseId || course.slug === courseId);
-  logSafeLookup({ courseId, listCoursesFound: Boolean(normalizedMatch) });
   return normalizedMatch || null;
 }
 
