@@ -25,7 +25,6 @@ import {
 } from "./firestoreTypes";
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = ["pending", "confirmed", "paid", "waitlist"];
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_SESSION_CAPACITY = 18;
 const DEFAULT_ONE_ON_ONE_DURATION_MINUTES = 60;
 
@@ -51,25 +50,38 @@ function getTimestampMillis(value: unknown): number {
   return 0;
 }
 
+function formatLocalDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function toDateInputValue(value: unknown): string {
   if (typeof value === "string") return value.slice(0, 10);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) return formatLocalDateInputValue(value);
   if (value && typeof value === "object" && "toDate" in value && typeof (value as Timestamp).toDate === "function") {
-    return (value as Timestamp).toDate().toISOString().slice(0, 10);
+    return formatLocalDateInputValue((value as Timestamp).toDate());
   }
   return "";
 }
 
-function toDate(value: string): Date {
-  return new Date(`${value}T00:00:00`);
+function toDate(value: string, time = "00:00"): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  const [hour = 0, minute = 0] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hour, minute);
 }
 
-function buildClassDates(firstClassDate: string, count = 4): Timestamp[] {
-  const startDate = toDate(firstClassDate);
+function buildClassDates(firstClassDate: string, startTime: string, count = 4): Timestamp[] {
+  const startDate = toDate(firstClassDate, startTime);
   if (Number.isNaN(startDate.getTime())) {
     throw new Error("firstClassDate 格式不正確");
   }
-  return Array.from({ length: count }, (_, index) => Timestamp.fromDate(new Date(startDate.getTime() + index * ONE_WEEK_MS)));
+  return Array.from({ length: count }, (_, index) => {
+    const classDate = new Date(startDate);
+    classDate.setDate(startDate.getDate() + index * 7);
+    return Timestamp.fromDate(classDate);
+  });
 }
 
 function isSessionOpen(session: Session): boolean {
@@ -244,7 +256,7 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
   const course = await getCourseById(input.courseId);
   if (!course) throw new Error("找不到課程");
 
-  const classDates = buildClassDates(input.firstClassDate);
+  const classDates = buildClassDates(input.firstClassDate, input.startTime);
 
   const ref = await addDoc(collection(firestore, "sessions"), {
     courseId: input.courseId,
@@ -252,7 +264,7 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
     weekday: input.weekday,
     startTime: input.startTime,
     endTime: input.endTime,
-    firstClassDate: Timestamp.fromDate(toDate(input.firstClassDate)),
+    firstClassDate: Timestamp.fromDate(toDate(input.firstClassDate, input.startTime)),
     classDates,
     capacity: Number(input.capacity) || DEFAULT_SESSION_CAPACITY,
     maxCapacity: Number(input.capacity) || DEFAULT_SESSION_CAPACITY,
@@ -312,8 +324,8 @@ export async function updateSession(sessionId: string, input: UpdateSessionInput
     updatedAt: serverTimestamp(),
     ...(shouldRebuildDates
       ? {
-          firstClassDate: nextFirstClassDate ? Timestamp.fromDate(toDate(nextFirstClassDate)) : deleteField(),
-          classDates: nextFirstClassDate ? buildClassDates(nextFirstClassDate) : deleteField(),
+          firstClassDate: nextFirstClassDate ? Timestamp.fromDate(toDate(nextFirstClassDate, nextStartTime)) : deleteField(),
+          classDates: nextFirstClassDate ? buildClassDates(nextFirstClassDate, nextStartTime) : deleteField(),
         }
       : {}),
     ...(shouldRebuildDates ? {} : { startTime: nextStartTime }),

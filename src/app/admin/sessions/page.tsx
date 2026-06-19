@@ -33,19 +33,37 @@ function toInputDate(value: string) {
   return value || "";
 }
 
-function generateClassDates(firstClassDate: string) {
-  const date = new Date(`${firstClassDate}T00:00:00`);
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toLocalDate(value: string, time = "00:00") {
+  const [year, month, day] = value.split("-").map(Number);
+  const [hour = 0, minute = 0] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hour, minute);
+}
+
+function toTimestampInputDate(value: unknown) {
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
+    return formatLocalDate((value as { toDate: () => Date }).toDate());
+  }
+  return "";
+}
+
+function generateClassDates(firstClassDate: string, startTime: string) {
+  const date = toLocalDate(firstClassDate, startTime);
   if (Number.isNaN(date.getTime())) {
     return [];
   }
 
   return Array.from({ length: 4 }, (_, index) => {
-    const item = new Date(date.getTime() + index * 7 * 24 * 60 * 60 * 1000);
-    return item.toLocaleDateString("zh-TW", {
-      month: "2-digit",
-      day: "2-digit",
-      weekday: "short",
-    });
+    const item = new Date(date);
+    item.setDate(date.getDate() + index * 7);
+    const weekday = item.toLocaleDateString("zh-TW", { weekday: "short" });
+    return `${formatLocalDate(item)} ${startTime}（${weekday}）`;
   });
 }
 
@@ -151,7 +169,7 @@ export default function AdminSessionsPage() {
       startTime: session.startTime,
       endTime: session.endTime,
       firstClassDate: toInputDate(
-        (session.firstClassDate as unknown as { toDate: () => Date })?.toDate?.()?.toISOString().slice(0, 10) ||
+        toTimestampInputDate(session.firstClassDate) ||
           session.startDate ||
           "",
       ),
@@ -171,8 +189,8 @@ export default function AdminSessionsPage() {
 
   const previewClassDates = useMemo(() => {
     if (!form.firstClassDate) return [];
-    return generateClassDates(form.firstClassDate);
-  }, [form.firstClassDate]);
+    return generateClassDates(form.firstClassDate, form.startTime);
+  }, [form.firstClassDate, form.startTime]);
 
   return (
     <section className="space-y-4">
