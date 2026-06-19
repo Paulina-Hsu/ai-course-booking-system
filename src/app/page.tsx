@@ -70,6 +70,7 @@ export default function HomePage() {
 
       <div className="grid gap-3 md:grid-cols-2">
         {courses.map((course) => {
+          const courseIdentifier = course.slug || course.id;
           const timeSlots = Array.isArray(course.timeSlots) ? course.timeSlots : [];
           const priceText =
             course.type === "oneOnOne"
@@ -87,7 +88,7 @@ export default function HomePage() {
               <p className="text-xs text-slate-500">時段：{timeSlots.join(" / ")}</p>
               <p className="text-xs text-slate-500">{scheduleText}</p>
               <Link
-                href={`/courses/${course.id}`}
+                href={`/courses/${courseIdentifier}`}
                 className="inline-flex items-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900"
                 style={{ color: "#0f172a" }}
               >

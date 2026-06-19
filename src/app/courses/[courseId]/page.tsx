@@ -75,7 +75,15 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
   }, [params.courseId]);
 
   if (!course) {
-    return <div className="card">課程不存在。</div>;
+    return (
+      <section className="card max-w-2xl space-y-3">
+        <h1 className="text-2xl font-bold">找不到課程：{params.courseId}</h1>
+        <p className="text-sm text-slate-600">請回到課程列表重新選擇課程。</p>
+        <Link href="/courses" className="inline-flex rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-900">
+          回到課程列表
+        </Link>
+      </section>
+    );
   }
 
   const getNumericPrice = (...values: unknown[]) => {

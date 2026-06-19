@@ -37,8 +37,10 @@ const ensureDb = () => {
 
 const normalizePhone = (phone: string) => phone.replace(/[^0-9]/g, "");
 
-function mapDoc<T>(snapshot: { id: string; data: () => DocumentData }): T & { id: string } {
-  return { id: snapshot.id, ...(snapshot.data() as T) } as T & { id: string };
+function mapDoc<T>(snapshot: { id: string; data: () => DocumentData }): T & { id: string; legacyId?: string } {
+  const data = snapshot.data();
+  const legacyId = typeof data.id === "string" ? data.id : undefined;
+  return { ...(data as T), legacyId, id: snapshot.id } as T & { id: string; legacyId?: string };
 }
 
 function getTimestampMillis(value: unknown): number {
@@ -104,6 +106,7 @@ type LegacyCourseRecord = Partial<
   Omit<Course, "id" | "type" | "timeSlots" | "memberPrice" | "nonMemberPrice" | "pricePerHour">
 > & {
   id: string;
+  legacyId?: string;
   type?: CourseType;
   title?: string;
   courseType?: CourseType;
@@ -139,7 +142,7 @@ function normalizeCourseRecord(record: LegacyCourseRecord): Course {
   return {
     ...record,
     name: record.name || record.title || "",
-    slug: record.slug || record.id,
+    slug: record.slug || record.legacyId || record.id,
     description: record.description || "",
     memberPrice,
     nonMemberPrice,
@@ -190,13 +193,31 @@ export async function listCourses(includeInactive = false): Promise<Course[]> {
 export async function getCourseById(courseId: string): Promise<Course | null> {
   if (!isFirebaseReady) return null;
   const firestore = ensureDb();
+  const isDevelopment = process.env.NODE_ENV !== "production";
+  const logSafeLookup = (payload: Record<string, unknown>) => {
+    if (isDevelopment) {
+      console.log("[getCourseById]", payload);
+    }
+  };
+
   const snap = await getDoc(doc(firestore, "courses", courseId));
+  logSafeLookup({ courseId, documentIdFound: snap.exists() });
   if (snap.exists()) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(snap));
 
   const slugSnapshot = await getDocs(query(collection(firestore, "courses"), where("slug", "==", courseId)));
   const slugMatch = slugSnapshot.docs[0];
-  if (!slugMatch) return null;
-  return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(slugMatch));
+  logSafeLookup({ courseId, slugFound: Boolean(slugMatch) });
+  if (slugMatch) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(slugMatch));
+
+  const legacyIdSnapshot = await getDocs(query(collection(firestore, "courses"), where("id", "==", courseId)));
+  const legacyIdMatch = legacyIdSnapshot.docs[0];
+  logSafeLookup({ courseId, legacyIdFound: Boolean(legacyIdMatch) });
+  if (legacyIdMatch) return normalizeCourseRecord(mapDoc<LegacyCourseRecord>(legacyIdMatch));
+
+  const courses = await listCourses(true);
+  const normalizedMatch = courses.find((course) => course.id === courseId || course.slug === courseId);
+  logSafeLookup({ courseId, listCoursesFound: Boolean(normalizedMatch) });
+  return normalizedMatch || null;
 }
 
 export interface CreateCourseInput {

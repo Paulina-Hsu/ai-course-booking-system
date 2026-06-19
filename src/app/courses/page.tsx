@@ -33,6 +33,7 @@ export default function CoursesPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {courses.map((course) => {
+          const courseIdentifier = course.slug || course.id;
           const timeSlots = Array.isArray(course.timeSlots) ? course.timeSlots : [];
           const priceText =
             course.type === "oneOnOne"
@@ -55,14 +56,14 @@ export default function CoursesPage() {
               <p className="text-xs text-slate-500">{scheduleText}</p>
               <div className="flex flex-col gap-2 pt-2 sm:flex-row">
                 <Link
-                  href={`/courses/${course.id}`}
+                  href={`/courses/${courseIdentifier}`}
                   className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
                   style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
                 >
                   查看詳情
                 </Link>
                 <Link
-                  href={`/courses/${course.id}/booking`}
+                  href={`/courses/${courseIdentifier}/booking`}
                   className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-900"
                   style={{ color: "#0f172a" }}
                 >
