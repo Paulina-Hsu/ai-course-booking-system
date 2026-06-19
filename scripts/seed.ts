@@ -1,10 +1,11 @@
-import { getApps, initializeApp } from "firebase-admin/app";
+import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import {
   DEFAULT_COURSES,
   DEFAULT_GROUP_SESSIONS,
   DEFAULT_ONE_ON_ONE_SLOTS,
 } from "../src/data/courses";
+import fs from "node:fs";
 
 type SeedDocument = { id: string; [key: string]: unknown };
 
@@ -14,10 +15,23 @@ if (!projectId) {
   throw new Error("Please set NEXT_PUBLIC_FIREBASE_PROJECT_ID or FIREBASE_PROJECT_ID before running seed.");
 }
 
+const resolvedCredential = (() => {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    return cert(JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8")));
+  }
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    return cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT));
+  }
+
+  return applicationDefault();
+})();
+
 const app =
   getApps().length === 0
     ? initializeApp({
         projectId,
+        credential: resolvedCredential,
       })
     : getApps()[0];
 
