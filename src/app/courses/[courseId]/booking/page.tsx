@@ -7,6 +7,7 @@ import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   createBooking,
   getCourseById,
+  listSessionClassDates,
   listOneOnOneSlots,
   listSessions,
 } from "@/lib/firestoreService";
@@ -15,6 +16,7 @@ interface SlotInfo {
   id: string;
   title: string;
   disabled: boolean;
+  classDates: string[];
 }
 
 function getSessionCapacity(session: Session): number {
@@ -25,7 +27,6 @@ function getSessionCapacity(session: Session): number {
 
 function isSessionOpen(session: Session): boolean {
   if (session.isOpen === false) return false;
-  if (session.status === "closed") return false;
   return true;
 }
 
@@ -37,6 +38,48 @@ function getNumericPrice(...values: unknown[]): number {
     }
   }
   return 0;
+}
+
+function formatDateValue(value: unknown): string {
+  if (typeof value === "string") return value.replaceAll("-", "/").slice(0, 10);
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
+    const date = (value as { toDate: () => Date }).toDate();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}/${month}/${day}`;
+  }
+  return "";
+}
+
+function getSessionFirstDate(session: Session): string {
+  return formatDateValue(session.firstClassDate) || formatDateValue(session.startDate);
+}
+
+function getRemainingSeats(session: Session): number {
+  const capacity = getSessionCapacity(session);
+  const enrolledCount = Number(session.enrolledCount || 0);
+  return Math.max(capacity - enrolledCount, 0);
+}
+
+function buildSessionSlotInfo(session: Session): SlotInfo {
+  const capacity = getSessionCapacity(session);
+  const enrolledCount = Number(session.enrolledCount || 0);
+  const isFull = enrolledCount >= capacity || session.isFull === true;
+  const isOpen = isSessionOpen(session);
+  const firstDate = getSessionFirstDate(session);
+  const sessionTitle = session.title || session.id;
+  const dateText = firstDate ? `${firstDate} 起` : "日期未設定";
+  const timeText = `${session.startTime || "時間未設定"}-${session.endTime || ""}`.replace(/-$/, "");
+  const remainingSeats = getRemainingSeats(session);
+  const classDates = listSessionClassDates(session).map((date) => date.replaceAll("-", "/"));
+
+  return {
+    id: session.id,
+    title: `${sessionTitle}｜${dateText}｜${timeText}｜剩餘 ${remainingSeats} 名${isFull ? "（已額滿）" : isOpen ? "" : "（已關閉）"}`,
+    disabled: !isOpen || isFull,
+    classDates: classDates.length > 0 ? classDates : firstDate ? [firstDate] : [],
+  };
 }
 
 export default function BookingPage() {
@@ -65,17 +108,9 @@ export default function BookingPage() {
       if (foundCourse.type === "group") {
         const sessions = await listSessions(foundCourse.id);
         setSlots(
-          sessions.map((session: Session) => {
-            const capacity = getSessionCapacity(session);
-            const isFull = session.enrolledCount >= capacity || session.isFull;
-            const isOpen = isSessionOpen(session);
-            return {
-              id: session.id,
-              title: `${session.startDate || ""}${session.startDate ? " " : ""}${session.startTime}-${session.endTime}` +
-                (isFull ? "（已額滿）" : isOpen ? "" : "（已關閉）"),
-              disabled: !isOpen || isFull,
-            };
-          }),
+          sessions
+            .map(buildSessionSlotInfo)
+            .sort((a, b) => Number(a.disabled) - Number(b.disabled) || a.title.localeCompare(b.title, "zh-TW")),
         );
       } else {
         const list = await listOneOnOneSlots();
@@ -86,6 +121,7 @@ export default function BookingPage() {
               (slot.isBooked ? "（已預約）" : "") +
               (slot.isOpen === false ? "（已關閉）" : ""),
             disabled: slot.isBooked || slot.isOpen === false,
+            classDates: [],
           })),
         );
       }
@@ -101,6 +137,7 @@ export default function BookingPage() {
         ? getNumericPrice(course.memberPrice)
         : getNumericPrice(course.nonMemberPrice)
     : 0;
+  const selectedSlotInfo = slots.find((slot) => slot.id === selectedSlot);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -197,6 +234,19 @@ export default function BookingPage() {
             ))}
           </select>
         </label>
+
+        {course.type === "group" && selectedSlotInfo?.classDates.length ? (
+          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <p className="mb-2 font-medium">4 堂日期</p>
+            <ul className="grid gap-1 sm:grid-cols-2">
+              {selectedSlotInfo.classDates.slice(0, 4).map((date, index) => (
+                <li key={`${selectedSlotInfo.id}-${date}`}>
+                  第 {index + 1} 堂：{date}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <p className="md:col-span-2 text-sm">預估費用：NT$ {amount}</p>
 

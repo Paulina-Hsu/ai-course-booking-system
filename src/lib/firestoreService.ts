@@ -86,7 +86,6 @@ function buildClassDates(firstClassDate: string, startTime: string, count = 4): 
 
 function isSessionOpen(session: Session): boolean {
   if (session.isOpen === false) return false;
-  if (typeof session.status === "string" && session.status !== "open") return false;
   return true;
 }
 
@@ -113,6 +112,10 @@ type LegacyCourseRecord = Partial<
   memberPrice?: number | string | null;
   nonMemberPrice?: number | string | null;
   pricePerHour?: number | string | null;
+};
+
+type LegacySessionRecord = Partial<Omit<Session, "id">> & {
+  id: string;
 };
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
@@ -147,6 +150,26 @@ function normalizeCourseRecord(record: LegacyCourseRecord): Course {
     timeSlots: timeSlots.length > 0 ? timeSlots : defaultTimeSlots,
     isActive: record.isActive ?? true,
     pricePerHour: normalizedPricePerHour,
+  };
+}
+
+function normalizeSessionRecord(record: LegacySessionRecord): Session {
+  const capacity = getSessionCapacity(record as Session);
+  const enrolledCount = toFiniteNumber(record.enrolledCount, 0);
+
+  return {
+    ...record,
+    courseId: record.courseId || "",
+    title: record.title || record.id,
+    weekday: record.weekday || "",
+    startTime: record.startTime || "",
+    endTime: record.endTime || "",
+    classDates: Array.isArray(record.classDates) ? record.classDates : [],
+    capacity,
+    maxCapacity: capacity,
+    enrolledCount,
+    isFull: record.isFull === true || enrolledCount >= capacity,
+    isOpen: record.isOpen ?? true,
   };
 }
 
@@ -246,10 +269,10 @@ export async function updateCourse(courseId: string, input: UpdateCourseInput): 
 export async function setCourseActive(courseId: string, isActive: boolean): Promise<void> {
   if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
   const firestore = ensureDb();
-  await updateDoc(doc(firestore, "courses", courseId), {
+  await updateDoc(doc(firestore, "courses", courseId), cleanPayload({
     isActive,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export async function listSessions(courseId?: string): Promise<Session[]> {
@@ -263,7 +286,7 @@ export async function listSessions(courseId?: string): Promise<Session[]> {
   );
 
   return snapshot.docs
-    .map((d) => mapDoc<Session>(d))
+    .map((d) => normalizeSessionRecord(mapDoc<LegacySessionRecord>(d)))
     .sort((a, b) => {
       const aDate = getTimestampMillis((a.firstClassDate as unknown) || a.startDate);
       const bDate = getTimestampMillis((b.firstClassDate as unknown) || b.startDate);
@@ -379,11 +402,11 @@ export async function setSessionOpen(sessionId: string, isOpen: boolean): Promis
   if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
   const firestore = ensureDb();
   const sessionRef = doc(firestore, "sessions", sessionId);
-  await updateDoc(sessionRef, {
+  await updateDoc(sessionRef, cleanPayload({
     isOpen,
     status: isOpen ? "open" : "closed",
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export async function listOneOnOneSlots(): Promise<OneOnOneSlot[]> {
@@ -461,10 +484,10 @@ export async function updateOneOnOneSlot(slotId: string, input: UpdateOneOnOneSl
 export async function setOneOnOneSlotOpen(slotId: string, isOpen: boolean): Promise<void> {
   if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
   const firestore = ensureDb();
-  await updateDoc(doc(firestore, "oneOnOneSlots", slotId), {
+  await updateDoc(doc(firestore, "oneOnOneSlots", slotId), cleanPayload({
     isOpen,
     updatedAt: serverTimestamp(),
-  });
+  }));
 }
 
 export interface BookingQueryFilter {
@@ -550,20 +573,21 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
       }
 
       const capacity = getSessionCapacity(session);
-      if (session.enrolledCount >= capacity) {
+      const currentEnrolledCount = Number(session.enrolledCount || 0);
+      if (session.isFull === true || currentEnrolledCount >= capacity) {
         throw new Error("名額已滿，無法報名");
       }
 
-      const enrolledCount = Number(session.enrolledCount || 0) + 1;
-      tx.update(sessionRef, {
+      const enrolledCount = currentEnrolledCount + 1;
+      tx.update(sessionRef, cleanPayload({
         enrolledCount,
         isFull: enrolledCount >= capacity,
-        status: enrolledCount >= capacity ? "closed" : session.status,
         maxCapacity: capacity,
         updatedAt: serverTimestamp(),
-      });
+        ...(enrolledCount >= capacity ? { status: "closed" } : {}),
+      }));
 
-      tx.set(bookingRef, {
+      tx.set(bookingRef, cleanPayload({
         courseId: input.courseId,
         sessionId: input.sessionId,
         name: input.name,
@@ -575,7 +599,7 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      }));
     });
 
     return bookingRef.id;
@@ -607,14 +631,14 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
       }
       if (slot.isBooked) throw new Error("這個時段已被預約");
 
-      tx.update(slotRef, {
+      tx.update(slotRef, cleanPayload({
         isBooked: true,
         studentPhone: normalizedPhone,
         bookingId: bookingRef.id,
         updatedAt: serverTimestamp(),
-      });
+      }));
 
-      tx.set(bookingRef, {
+      tx.set(bookingRef, cleanPayload({
         courseId: input.courseId,
         oneOnOneSlotId,
         name: input.name,
@@ -626,7 +650,7 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      }));
     });
 
     return bookingRef.id;
@@ -665,13 +689,13 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
         if (releaseCapacity && enrolledCount > 0) enrolledCount -= 1;
         if (reclaimCapacity && enrolledCount < capacity) enrolledCount += 1;
 
-        tx.update(sessionRef, {
+        tx.update(sessionRef, cleanPayload({
           enrolledCount,
           isFull: enrolledCount >= capacity,
           status: enrolledCount >= capacity ? "closed" : "open",
           maxCapacity: capacity,
           updatedAt: serverTimestamp(),
-        });
+        }));
       }
     }
 
@@ -682,12 +706,12 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
         const slot = slotSnap.data() as OneOnOneSlot;
 
         if (releaseCapacity) {
-          tx.update(slotRef, {
+          tx.update(slotRef, cleanPayload({
             isBooked: false,
             studentPhone: null,
             bookingId: null,
             updatedAt: serverTimestamp(),
-          });
+          }));
         } else if (reclaimCapacity) {
           if (slot.isBooked && slot.bookingId !== bookingId) {
             throw new Error("此時段已被其他學員佔用");
@@ -697,20 +721,20 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
             throw new Error("1 對 1 時段目前未開放");
           }
 
-          tx.update(slotRef, {
+          tx.update(slotRef, cleanPayload({
             isBooked: true,
             studentPhone: booking.phone,
             bookingId,
             updatedAt: serverTimestamp(),
-          });
+          }));
         }
       }
     }
 
-    tx.update(bookingRef, {
+    tx.update(bookingRef, cleanPayload({
       status: nextStatus,
       updatedAt: serverTimestamp(),
-    });
+    }));
   });
 }
 

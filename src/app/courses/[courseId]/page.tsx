@@ -3,7 +3,42 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
-import { getCourseById, listOneOnOneSlots, listSessions, formatSessionLabel } from "@/lib/firestoreService";
+import { getCourseById, listOneOnOneSlots, listSessions } from "@/lib/firestoreService";
+
+function getSessionCapacity(session: Session): number {
+  if (typeof session.capacity === "number" && Number.isFinite(session.capacity)) return session.capacity;
+  if (typeof session.maxCapacity === "number" && Number.isFinite(session.maxCapacity)) return session.maxCapacity;
+  return 18;
+}
+
+function formatDateValue(value: unknown): string {
+  if (typeof value === "string") return value.replaceAll("-", "/").slice(0, 10);
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: () => Date }).toDate === "function") {
+    const date = (value as { toDate: () => Date }).toDate();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}/${month}/${day}`;
+  }
+  return "";
+}
+
+function getSessionFirstDate(session: Session): string {
+  return formatDateValue(session.firstClassDate) || formatDateValue(session.startDate);
+}
+
+function isSessionSelectable(session: Session): boolean {
+  const enrolledCount = Number(session.enrolledCount || 0);
+  return session.isOpen !== false && session.isFull !== true && enrolledCount < getSessionCapacity(session);
+}
+
+function formatSessionOptionLabel(session: Session): string {
+  const firstDate = getSessionFirstDate(session);
+  const remainingSeats = Math.max(getSessionCapacity(session) - Number(session.enrolledCount || 0), 0);
+  const dateText = firstDate ? `${firstDate} 起` : "日期未設定";
+  const timeText = `${session.startTime || "時間未設定"}-${session.endTime || ""}`.replace(/-$/, "");
+  return `${session.title || session.id}｜${dateText}｜${timeText}｜剩餘 ${remainingSeats} 名`;
+}
 
 export default function CourseDetailPage({ params }: { params: { courseId: string } }) {
   const [course, setCourse] = useState<Course | null>(null);
@@ -21,7 +56,7 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
       setCourse(foundCourse);
 
       if (foundCourse.type === "group") {
-        const sessions = (await listSessions(foundCourse.id)).filter((session) => session.isOpen !== false);
+        const sessions = (await listSessions(foundCourse.id)).filter(isSessionSelectable);
         setTerms(sessions);
       } else {
         const slots = (await listOneOnOneSlots()).filter((slot) => slot.isOpen !== false);
@@ -38,7 +73,7 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
 
   const labels = terms.map((term) => {
     if ("courseId" in term) {
-      return formatSessionLabel(term as Session);
+      return formatSessionOptionLabel(term as Session);
     }
     return `${term.date} ${term.startTime} - ${term.endTime}`;
   });
