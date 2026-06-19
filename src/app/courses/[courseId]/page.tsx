@@ -42,6 +42,23 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
     }
     return `${term.date} ${term.startTime} - ${term.endTime}`;
   });
+  const getNumericPrice = (...values: unknown[]) => {
+    for (const value of values) {
+      const numericValue = typeof value === "string" ? Number(value) : value;
+      if (typeof numericValue === "number" && Number.isFinite(numericValue)) {
+        return numericValue;
+      }
+    }
+    return 0;
+  };
+  const formatCurrency = (value: number) => `NT$${new Intl.NumberFormat("zh-TW").format(value)}`;
+  const timeSlots = Array.isArray(course.timeSlots) ? course.timeSlots : [];
+  const priceText =
+    course.type === "oneOnOne"
+      ? `${formatCurrency(getNumericPrice(course.pricePerHour, course.memberPrice, course.nonMemberPrice))} / 小時`
+      : `會員價：${formatCurrency(getNumericPrice(course.memberPrice))} / 非會員價：${formatCurrency(getNumericPrice(course.nonMemberPrice))}`;
+  const scheduleText =
+    course.type === "oneOnOne" ? "每次 1 小時，08:30-09:30 可預約" : "每期 4 堂，團體每堂 2 小時";
 
   return (
     <section className="space-y-6">
@@ -52,6 +69,9 @@ export default function CourseDetailPage({ params }: { params: { courseId: strin
       <div className="card space-y-3">
         <h1 className="text-2xl font-bold">{course.name}</h1>
         <p className="text-slate-700">{course.description}</p>
+        <p className="text-sm">{priceText}</p>
+        <p className="text-xs text-slate-500">時段：{timeSlots.join(" / ")}</p>
+        <p className="text-xs text-slate-500">{scheduleText}</p>
       </div>
 
       <div className="card space-y-2">

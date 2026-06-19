@@ -101,12 +101,24 @@ function cleanPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(entries);
 }
 
-type LegacyCourseRecord = Omit<Course, "timeSlots"> & {
+type LegacyCourseRecord = Partial<
+  Omit<Course, "id" | "type" | "timeSlots" | "memberPrice" | "nonMemberPrice" | "pricePerHour">
+> & {
+  id: string;
+  type?: CourseType;
   title?: string;
   courseType?: CourseType;
   capacity?: number;
   timeSlots?: string[] | string | null;
+  memberPrice?: number | string | null;
+  nonMemberPrice?: number | string | null;
+  pricePerHour?: number | string | null;
 };
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const numericValue = typeof value === "string" ? Number(value) : value;
+  return typeof numericValue === "number" && Number.isFinite(numericValue) ? numericValue : fallback;
+}
 
 function normalizeCourseRecord(record: LegacyCourseRecord): Course {
   const type = record.type || record.courseType || "group";
@@ -116,15 +128,25 @@ function normalizeCourseRecord(record: LegacyCourseRecord): Course {
     : typeof record.timeSlots === "string"
       ? record.timeSlots.split(/[,，]/).map((timeSlot) => timeSlot.trim()).filter(Boolean)
       : defaultTimeSlots;
+  const pricePerHour = toFiniteNumber(record.pricePerHour, toFiniteNumber(record.memberPrice, toFiniteNumber(record.nonMemberPrice, 1600)));
+  const memberPrice = toFiniteNumber(record.memberPrice, type === "oneOnOne" ? pricePerHour : 0);
+  const nonMemberPrice = toFiniteNumber(record.nonMemberPrice, type === "oneOnOne" ? pricePerHour : memberPrice);
+  const normalizedPricePerHour = type === "oneOnOne" ? pricePerHour : toFiniteNumber(record.pricePerHour, 0) || undefined;
 
   return {
     ...record,
     name: record.name || record.title || "",
+    slug: record.slug || record.id,
+    description: record.description || "",
+    memberPrice,
+    nonMemberPrice,
     type,
     maxCapacity: record.maxCapacity || record.capacity || DEFAULT_SESSION_CAPACITY,
     sessionsCount: record.sessionsCount || (type === "oneOnOne" ? 1 : 4),
     durationMinutes: record.durationMinutes || (type === "oneOnOne" ? 60 : 120),
     timeSlots: timeSlots.length > 0 ? timeSlots : defaultTimeSlots,
+    isActive: record.isActive ?? true,
+    pricePerHour: normalizedPricePerHour,
   };
 }
 

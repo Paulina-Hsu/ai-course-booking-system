@@ -29,6 +29,16 @@ function isSessionOpen(session: Session): boolean {
   return true;
 }
 
+function getNumericPrice(...values: unknown[]): number {
+  for (const value of values) {
+    const numericValue = typeof value === "string" ? Number(value) : value;
+    if (typeof numericValue === "number" && Number.isFinite(numericValue)) {
+      return numericValue;
+    }
+  }
+  return 0;
+}
+
 export default function BookingPage() {
   const router = useRouter();
   const params = useParams<{ courseId: string }>();
@@ -86,10 +96,10 @@ export default function BookingPage() {
 
   const amount = course
     ? course.type === "oneOnOne"
-      ? course.pricePerHour || course.memberPrice
+      ? getNumericPrice(course.pricePerHour, course.memberPrice, course.nonMemberPrice)
       : isMember
-        ? course.memberPrice
-        : course.nonMemberPrice
+        ? getNumericPrice(course.memberPrice)
+        : getNumericPrice(course.nonMemberPrice)
     : 0;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
