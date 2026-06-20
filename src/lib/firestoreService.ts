@@ -38,7 +38,7 @@ const ensureDb = () => {
 
 const normalizePhone = (phone: string) => phone.replace(/[^0-9]/g, "");
 
-async function createPublicBookingId(scope: "session" | "oneOnOne", targetId: string, normalizedPhone: string): Promise<string> {
+async function createPublicBookingKey(scope: "session" | "oneOnOne", targetId: string, normalizedPhone: string): Promise<string> {
   const source = `${scope}:${targetId}:${normalizedPhone}`;
 
   if (typeof crypto !== "undefined" && crypto.subtle) {
@@ -49,7 +49,30 @@ async function createPublicBookingId(scope: "session" | "oneOnOne", targetId: st
   }
 
   const safeTargetId = targetId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
-  return `${scope}_${safeTargetId}_${normalizedPhone}`;
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+  }
+  return `${scope}_${safeTargetId}_${Math.abs(hash)}`;
+}
+
+function getFirestoreErrorDetails(error: unknown) {
+  const maybeFirebaseError = error as { code?: unknown; message?: unknown };
+  return {
+    code: typeof maybeFirebaseError?.code === "string" ? maybeFirebaseError.code : "unknown",
+    message: typeof maybeFirebaseError?.message === "string" ? maybeFirebaseError.message : "報名失敗",
+  };
+}
+
+function createBookingStepError(step: string, error: unknown): Error {
+  const details = getFirestoreErrorDetails(error);
+  if (process.env.NODE_ENV === "development") {
+    console.error("[createBooking]", step, {
+      code: details.code,
+      message: details.message,
+    });
+  }
+  return new Error(`${step}_FAILED: ${details.message}`);
 }
 
 function mapDoc<T>(snapshot: { id: string; data: () => DocumentData }): T & { id: string; legacyId?: string } {
@@ -675,97 +698,149 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
 
   if (input.sessionId) {
     const sessionId = input.sessionId;
-    const bookingRef = doc(firestore, "bookings", await createPublicBookingId("session", sessionId, normalizedPhone));
+    const bookingRef = doc(collection(firestore, "bookings"));
+    const bookingKeyRef = doc(
+      firestore,
+      "bookingKeys",
+      await createPublicBookingKey("session", `${input.courseId}:${sessionId}`, normalizedPhone),
+    );
+    let bookingStep = "CHECK_DUPLICATE_BOOKING";
 
-    await runTransaction(firestore, async (tx: Transaction) => {
-      const sessionRef = doc(firestore, "sessions", sessionId);
-      const sessionSnap = await tx.get(sessionRef);
-      if (!sessionSnap.exists()) throw new Error("找不到時段");
+    try {
+      await runTransaction(firestore, async (tx: Transaction) => {
+        bookingStep = "CHECK_DUPLICATE_BOOKING";
+        const bookingKeySnap = await tx.get(bookingKeyRef);
+        if (bookingKeySnap.exists()) {
+          throw new Error("此手機號碼已重複報名同一期課程");
+        }
 
-      const session = sessionSnap.data() as Session;
-      if (!isSessionOpen(session)) {
-        throw new Error("該一期課程目前未開放報名");
-      }
+        bookingStep = "READ_SESSION";
+        const sessionRef = doc(firestore, "sessions", sessionId);
+        const sessionSnap = await tx.get(sessionRef);
+        if (!sessionSnap.exists()) throw new Error("找不到時段");
 
-      const capacity = getSessionCapacity(session);
-      const currentEnrolledCount = Number(session.enrolledCount || 0);
-      if (session.isFull === true || currentEnrolledCount >= capacity) {
-        throw new Error("名額已滿，無法報名");
-      }
+        const session = sessionSnap.data() as Session;
+        if (!isSessionOpen(session)) {
+          throw new Error("該一期課程目前未開放報名");
+        }
 
-      const enrolledCount = currentEnrolledCount + 1;
-      tx.update(sessionRef, cleanPayload({
-        enrolledCount,
-        isFull: enrolledCount >= capacity,
-        maxCapacity: capacity,
-        updatedAt: serverTimestamp(),
-        ...(enrolledCount >= capacity ? { status: "closed" } : {}),
-      }));
+        const capacity = getSessionCapacity(session);
+        const currentEnrolledCount = Number(session.enrolledCount || 0);
+        if (session.isFull === true || currentEnrolledCount >= capacity) {
+          throw new Error("名額已滿，無法報名");
+        }
 
-      tx.set(bookingRef, cleanPayload({
-        courseId: input.courseId,
-        sessionId: input.sessionId,
-        name: input.name,
-        phone: normalizedPhone,
-        email: input.email?.trim(),
-        lineId: input.lineId?.trim() || undefined,
-        contactPreference: input.contactPreference,
-        ageRange: input.ageRange,
-        aiLevel: input.aiLevel,
-        learningGoal: input.learningGoal?.trim() || undefined,
-        isMember: input.isMember,
-        amount,
-        note: input.note,
-        status: "pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }));
-    });
+        const enrolledCount = currentEnrolledCount + 1;
+        bookingStep = "UPDATE_SESSION_AND_CREATE_BOOKING";
+        tx.set(bookingKeyRef, cleanPayload({
+          bookingId: bookingRef.id,
+          courseId: input.courseId,
+          sessionId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }));
+
+        tx.update(sessionRef, cleanPayload({
+          enrolledCount,
+          isFull: enrolledCount >= capacity,
+          maxCapacity: capacity,
+          updatedAt: serverTimestamp(),
+          ...(enrolledCount >= capacity ? { status: "closed" } : {}),
+        }));
+
+        tx.set(bookingRef, cleanPayload({
+          courseId: input.courseId,
+          sessionId: input.sessionId,
+          name: input.name,
+          phone: normalizedPhone,
+          email: input.email?.trim(),
+          lineId: input.lineId?.trim() || undefined,
+          contactPreference: input.contactPreference,
+          ageRange: input.ageRange,
+          aiLevel: input.aiLevel,
+          learningGoal: input.learningGoal?.trim() || undefined,
+          isMember: input.isMember,
+          amount,
+          note: input.note,
+          status: "pending",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }));
+      });
+    } catch (error) {
+      throw createBookingStepError(bookingStep, error);
+    }
 
     return bookingRef.id;
   }
 
   if (input.oneOnOneSlotId) {
     const oneOnOneSlotId = input.oneOnOneSlotId;
-    const bookingRef = doc(firestore, "bookings", await createPublicBookingId("oneOnOne", oneOnOneSlotId, normalizedPhone));
+    const bookingRef = doc(collection(firestore, "bookings"));
+    const bookingKeyRef = doc(
+      firestore,
+      "bookingKeys",
+      await createPublicBookingKey("oneOnOne", `${input.courseId}:${oneOnOneSlotId}`, normalizedPhone),
+    );
+    let bookingStep = "CHECK_DUPLICATE_BOOKING";
 
-    await runTransaction(firestore, async (tx: Transaction) => {
-      const slotRef = doc(firestore, "oneOnOneSlots", oneOnOneSlotId);
-      const slotSnap = await tx.get(slotRef);
-      if (!slotSnap.exists()) throw new Error("找不到 1 對 1 時段");
+    try {
+      await runTransaction(firestore, async (tx: Transaction) => {
+        bookingStep = "CHECK_DUPLICATE_BOOKING";
+        const bookingKeySnap = await tx.get(bookingKeyRef);
+        if (bookingKeySnap.exists()) {
+          throw new Error("此手機號碼已重複報名同一期課程");
+        }
 
-      const slot = slotSnap.data() as OneOnOneSlot;
-      if (slot.isOpen === false) {
-        throw new Error("1 對 1 時段目前未開放");
-      }
-      if (slot.isBooked) throw new Error("這個時段已被預約");
+        bookingStep = "READ_SLOT";
+        const slotRef = doc(firestore, "oneOnOneSlots", oneOnOneSlotId);
+        const slotSnap = await tx.get(slotRef);
+        if (!slotSnap.exists()) throw new Error("找不到 1 對 1 時段");
 
-      tx.update(slotRef, cleanPayload({
-        isBooked: true,
-        studentPhone: normalizedPhone,
-        bookingId: bookingRef.id,
-        updatedAt: serverTimestamp(),
-      }));
+        const slot = slotSnap.data() as OneOnOneSlot;
+        if (slot.isOpen === false) {
+          throw new Error("1 對 1 時段目前未開放");
+        }
+        if (slot.isBooked) throw new Error("這個時段已被預約");
 
-      tx.set(bookingRef, cleanPayload({
-        courseId: input.courseId,
-        oneOnOneSlotId,
-        name: input.name,
-        phone: normalizedPhone,
-        email: input.email?.trim(),
-        lineId: input.lineId?.trim() || undefined,
-        contactPreference: input.contactPreference,
-        ageRange: input.ageRange,
-        aiLevel: input.aiLevel,
-        learningGoal: input.learningGoal?.trim() || undefined,
-        isMember: input.isMember,
-        amount,
-        note: input.note,
-        status: "pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }));
-    });
+        bookingStep = "UPDATE_SLOT_AND_CREATE_BOOKING";
+        tx.set(bookingKeyRef, cleanPayload({
+          bookingId: bookingRef.id,
+          courseId: input.courseId,
+          oneOnOneSlotId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }));
+
+        tx.update(slotRef, cleanPayload({
+          isBooked: true,
+          studentPhone: normalizedPhone,
+          bookingId: bookingRef.id,
+          updatedAt: serverTimestamp(),
+        }));
+
+        tx.set(bookingRef, cleanPayload({
+          courseId: input.courseId,
+          oneOnOneSlotId,
+          name: input.name,
+          phone: normalizedPhone,
+          email: input.email?.trim(),
+          lineId: input.lineId?.trim() || undefined,
+          contactPreference: input.contactPreference,
+          ageRange: input.ageRange,
+          aiLevel: input.aiLevel,
+          learningGoal: input.learningGoal?.trim() || undefined,
+          isMember: input.isMember,
+          amount,
+          note: input.note,
+          status: "pending",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }));
+      });
+    } catch (error) {
+      throw createBookingStepError(bookingStep, error);
+    }
 
     return bookingRef.id;
   }

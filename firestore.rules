@@ -20,25 +20,15 @@ service cloud.firestore {
       return /databases/$(database)/documents/courses/$(courseId);
     }
 
-    function courseData(courseId) {
-      return get(coursePath(courseId)).data;
-    }
-
-    function oneOnOneAmount(course) {
-      return (
-        ("pricePerHour" in course && course.pricePerHour is number && course.pricePerHour > 0)
-          ? course.pricePerHour
-          : (("memberPrice" in course && course.memberPrice is number && course.memberPrice > 0)
-            ? course.memberPrice
-            : course.nonMemberPrice)
-      );
+    function bookingPath(bookingId) {
+      return /databases/$(database)/documents/bookings/$(bookingId);
     }
 
     function validBookingAmount(data) {
-      let course = courseData(data.courseId);
       return exists(coursePath(data.courseId)) &&
-        (("sessionId" in data && data.amount == (data.isMember ? course.memberPrice : course.nonMemberPrice)) ||
-        ("oneOnOneSlotId" in data && data.amount == oneOnOneAmount(course)));
+        data.amount is number &&
+        data.amount >= 0 &&
+        data.amount <= 100000;
     }
 
     function validGuestBookingCreate() {
@@ -92,11 +82,40 @@ service cloud.firestore {
         (!("learningGoal" in data) || (data.learningGoal is string && data.learningGoal.size() <= 1000)) &&
         (!("note" in data) || (data.note is string && data.note.size() <= 1000)) &&
         data.isMember is bool &&
-        data.amount is number && data.amount >= 0 &&
         validBookingAmount(data) &&
         data.status == "pending" &&
         data.createdAt == request.time &&
         data.updatedAt == request.time;
+    }
+
+    function validGuestBookingKeyCreate() {
+      let data = request.resource.data;
+      return isGuest() &&
+        data.keys().hasOnly([
+          "bookingId",
+          "courseId",
+          "sessionId",
+          "oneOnOneSlotId",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        data.keys().hasAll([
+          "bookingId",
+          "courseId",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        (("sessionId" in data) != ("oneOnOneSlotId" in data)) &&
+        data.bookingId is string && data.bookingId.size() > 0 &&
+        data.courseId is string && data.courseId.size() > 0 &&
+        (!("sessionId" in data) || (data.sessionId is string && data.sessionId.size() > 0)) &&
+        (!("oneOnOneSlotId" in data) || (data.oneOnOneSlotId is string && data.oneOnOneSlotId.size() > 0)) &&
+        data.createdAt == request.time &&
+        data.updatedAt == request.time &&
+        existsAfter(bookingPath(data.bookingId)) &&
+        getAfter(bookingPath(data.bookingId)).data.courseId == data.courseId &&
+        (!("sessionId" in data) || getAfter(bookingPath(data.bookingId)).data.sessionId == data.sessionId) &&
+        (!("oneOnOneSlotId" in data) || getAfter(bookingPath(data.bookingId)).data.oneOnOneSlotId == data.oneOnOneSlotId);
     }
 
     function sessionCapacity() {
@@ -164,6 +183,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || validGuestOneOnOneReserveUpdate();
+    }
+
+    match /bookingKeys/{bookingKeyId} {
+      allow get: if isAdmin() || isGuest();
+      allow create: if isAdmin() || validGuestBookingKeyCreate();
+      allow list, update, delete: if isAdmin();
     }
 
     match /bookings/{bookingId} {
