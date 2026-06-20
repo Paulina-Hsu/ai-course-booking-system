@@ -25,7 +25,6 @@ import {
   Session,
 } from "./firestoreTypes";
 
-const DUPLICATE_BOOKING_STATUSES: BookingStatus[] = ["pending", "confirmed", "paid", "waitlist"];
 const CAPACITY_COUNTED_BOOKING_STATUSES: BookingStatus[] = ["pending", "confirmed", "paid"];
 const DEFAULT_SESSION_CAPACITY = 18;
 const DEFAULT_ONE_ON_ONE_DURATION_MINUTES = 60;
@@ -38,6 +37,20 @@ const ensureDb = () => {
 };
 
 const normalizePhone = (phone: string) => phone.replace(/[^0-9]/g, "");
+
+async function createPublicBookingId(scope: "session" | "oneOnOne", targetId: string, normalizedPhone: string): Promise<string> {
+  const source = `${scope}:${targetId}:${normalizedPhone}`;
+
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const bytes = new TextEncoder().encode(source);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${scope}_${hash}`;
+  }
+
+  const safeTargetId = targetId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+  return `${scope}_${safeTargetId}_${normalizedPhone}`;
+}
 
 function mapDoc<T>(snapshot: { id: string; data: () => DocumentData }): T & { id: string; legacyId?: string } {
   const data = snapshot.data();
@@ -658,23 +671,11 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
   if (!course) throw new Error("找不到課程");
 
   const normalizedPhone = normalizePhone(input.phone);
-  const bookingRef = doc(collection(firestore, "bookings"));
   const amount = calculateBookingAmount(course, input.isMember);
 
   if (input.sessionId) {
     const sessionId = input.sessionId;
-    const duplicated = await getDocs(
-      query(
-        collection(firestore, "bookings"),
-        where("sessionId", "==", input.sessionId),
-        where("phone", "==", normalizedPhone),
-        where("status", "in", DUPLICATE_BOOKING_STATUSES),
-      ),
-    );
-
-    if (duplicated.size > 0) {
-      throw new Error("此手機號碼已重複報名同一期課程");
-    }
+    const bookingRef = doc(firestore, "bookings", await createPublicBookingId("session", sessionId, normalizedPhone));
 
     await runTransaction(firestore, async (tx: Transaction) => {
       const sessionRef = doc(firestore, "sessions", sessionId);
@@ -726,18 +727,7 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
 
   if (input.oneOnOneSlotId) {
     const oneOnOneSlotId = input.oneOnOneSlotId;
-    const duplicated = await getDocs(
-      query(
-        collection(firestore, "bookings"),
-        where("oneOnOneSlotId", "==", oneOnOneSlotId),
-        where("phone", "==", normalizedPhone),
-        where("status", "in", DUPLICATE_BOOKING_STATUSES),
-      ),
-    );
-
-    if (duplicated.size > 0) {
-      throw new Error("此手機號碼已重複報名同一期課程");
-    }
+    const bookingRef = doc(firestore, "bookings", await createPublicBookingId("oneOnOne", oneOnOneSlotId, normalizedPhone));
 
     await runTransaction(firestore, async (tx: Transaction) => {
       const slotRef = doc(firestore, "oneOnOneSlots", oneOnOneSlotId);

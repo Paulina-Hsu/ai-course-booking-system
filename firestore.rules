@@ -5,6 +5,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isGuest() {
+      return request.auth == null;
+    }
+
     function isAdmin() {
       return (
         isSignedIn() &&
@@ -12,24 +16,160 @@ service cloud.firestore {
       );
     }
 
+    function coursePath(courseId) {
+      return /databases/$(database)/documents/courses/$(courseId);
+    }
+
+    function courseData(courseId) {
+      return get(coursePath(courseId)).data;
+    }
+
+    function oneOnOneAmount(course) {
+      return (
+        ("pricePerHour" in course && course.pricePerHour is number && course.pricePerHour > 0)
+          ? course.pricePerHour
+          : (("memberPrice" in course && course.memberPrice is number && course.memberPrice > 0)
+            ? course.memberPrice
+            : course.nonMemberPrice)
+      );
+    }
+
+    function validBookingAmount(data) {
+      let course = courseData(data.courseId);
+      return exists(coursePath(data.courseId)) &&
+        (("sessionId" in data && data.amount == (data.isMember ? course.memberPrice : course.nonMemberPrice)) ||
+        ("oneOnOneSlotId" in data && data.amount == oneOnOneAmount(course)));
+    }
+
+    function validGuestBookingCreate() {
+      let data = request.resource.data;
+      return isGuest() &&
+        data.keys().hasOnly([
+          "courseId",
+          "sessionId",
+          "oneOnOneSlotId",
+          "name",
+          "phone",
+          "email",
+          "lineId",
+          "contactPreference",
+          "ageRange",
+          "aiLevel",
+          "learningGoal",
+          "isMember",
+          "amount",
+          "note",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        data.keys().hasAll([
+          "courseId",
+          "name",
+          "phone",
+          "email",
+          "contactPreference",
+          "ageRange",
+          "aiLevel",
+          "isMember",
+          "amount",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        (("sessionId" in data) != ("oneOnOneSlotId" in data)) &&
+        data.courseId is string && data.courseId.size() > 0 &&
+        (!("sessionId" in data) || (data.sessionId is string && data.sessionId.size() > 0)) &&
+        (!("oneOnOneSlotId" in data) || (data.oneOnOneSlotId is string && data.oneOnOneSlotId.size() > 0)) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
+        data.phone is string && data.phone.matches("^[0-9]{8,15}$") &&
+        data.email is string && data.email.size() <= 120 && data.email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$") &&
+        data.contactPreference in ["phone", "email", "line"] &&
+        data.ageRange is string && data.ageRange.size() > 0 && data.ageRange.size() <= 30 &&
+        data.aiLevel is string && data.aiLevel.size() > 0 && data.aiLevel.size() <= 80 &&
+        (!("lineId" in data) || (data.lineId is string && data.lineId.size() <= 80)) &&
+        (data.contactPreference != "line" || ("lineId" in data && data.lineId is string && data.lineId.size() > 0)) &&
+        (!("learningGoal" in data) || (data.learningGoal is string && data.learningGoal.size() <= 1000)) &&
+        (!("note" in data) || (data.note is string && data.note.size() <= 1000)) &&
+        data.isMember is bool &&
+        data.amount is number && data.amount >= 0 &&
+        validBookingAmount(data) &&
+        data.status == "pending" &&
+        data.createdAt == request.time &&
+        data.updatedAt == request.time;
+    }
+
+    function sessionCapacity() {
+      return (
+        ("capacity" in resource.data && resource.data.capacity is number)
+          ? resource.data.capacity
+          : (("maxCapacity" in resource.data && resource.data.maxCapacity is number)
+            ? resource.data.maxCapacity
+            : 18)
+      );
+    }
+
+    function sessionEnrolledCount() {
+      return (
+        ("enrolledCount" in resource.data && resource.data.enrolledCount is number)
+          ? resource.data.enrolledCount
+          : 0
+      );
+    }
+
+    function validGuestSessionEnrollmentUpdate() {
+      let changed = request.resource.data.diff(resource.data).changedKeys();
+      let nextCount = request.resource.data.enrolledCount;
+      let capacity = sessionCapacity();
+      return isGuest() &&
+        changed.hasOnly(["enrolledCount", "isFull", "maxCapacity", "updatedAt", "status"]) &&
+        resource.data.isOpen != false &&
+        resource.data.isFull != true &&
+        nextCount is number &&
+        nextCount == sessionEnrolledCount() + 1 &&
+        nextCount >= 0 &&
+        nextCount <= capacity &&
+        request.resource.data.maxCapacity == capacity &&
+        request.resource.data.isFull == (nextCount >= capacity) &&
+        (!changed.hasAny(["status"]) || request.resource.data.status == (nextCount >= capacity ? "closed" : resource.data.status)) &&
+        request.resource.data.updatedAt == request.time;
+    }
+
+    function validGuestOneOnOneReserveUpdate() {
+      let changed = request.resource.data.diff(resource.data).changedKeys();
+      return isGuest() &&
+        changed.hasOnly(["isBooked", "studentPhone", "bookingId", "updatedAt"]) &&
+        resource.data.isOpen != false &&
+        resource.data.isBooked != true &&
+        request.resource.data.isBooked == true &&
+        request.resource.data.studentPhone is string &&
+        request.resource.data.studentPhone.matches("^[0-9]{8,15}$") &&
+        request.resource.data.bookingId is string &&
+        request.resource.data.bookingId.size() > 0 &&
+        request.resource.data.updatedAt == request.time;
+    }
+
     match /courses/{courseId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /sessions/{sessionId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || validGuestSessionEnrollmentUpdate();
     }
 
     match /oneOnOneSlots/{slotId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || validGuestOneOnOneReserveUpdate();
     }
 
     match /bookings/{bookingId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin() || validGuestBookingCreate();
+      allow get: if isAdmin() || isGuest();
+      allow list, update, delete: if isAdmin();
     }
 
     match /admins/{uid} {
@@ -38,7 +178,7 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
