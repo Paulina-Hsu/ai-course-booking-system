@@ -20,6 +20,13 @@ const contactPreferenceMap: Record<ContactPreference, string> = {
   email: "Email",
   line: "LINE",
 };
+const adminStatusLabelMap: Record<BookingStatus, string> = {
+  pending: "待確認",
+  confirmed: "已確認（未付款）",
+  paid: "已付款（已確認）",
+  cancelled: "已取消",
+  waitlist: "候補",
+};
 
 function buildCsv(rows: string[][], headers: string[]) {
   const escapeCsv = (value: string) => `"${value.replaceAll("\"", "\"\"")}"`;
@@ -224,6 +231,10 @@ export default function AdminBookingsPage() {
         </select>
       </div>
 
+      <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-600">
+        狀態為單一目前狀態：若已接受報名但尚未付款，請選「已確認（未付款）」；若已完成付款，請選「已付款（已確認）」。
+      </p>
+
       {loading ? <p>讀取中...</p> : null}
 
       <div className="overflow-x-auto">
@@ -249,8 +260,8 @@ export default function AdminBookingsPage() {
               <tr key={booking.id}>
                 <td className="border border-slate-200 px-3 py-2">{booking.name}</td>
                 <td className="border border-slate-200 px-3 py-2">{booking.phone}</td>
-                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.email)}</td>
-                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.lineId)}</td>
+                <td className="break-all border border-slate-200 px-3 py-2 leading-relaxed whitespace-normal">{displayValue(booking.email)}</td>
+                <td className="break-all border border-slate-200 px-3 py-2 leading-relaxed whitespace-normal">{displayValue(booking.lineId)}</td>
                 <td className="border border-slate-200 px-3 py-2">{displayContactPreference(booking.contactPreference)}</td>
                 <td className="border border-slate-200 px-3 py-2">{displayValue(booking.ageRange)}</td>
                 <td className="border border-slate-200 px-3 py-2">{displayValue(booking.aiLevel)}</td>
@@ -274,7 +285,7 @@ export default function AdminBookingsPage() {
                   >
                     {BOOKING_STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {adminStatusLabelMap[option.value]}
                       </option>
                     ))}
                   </select>
