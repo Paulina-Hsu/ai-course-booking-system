@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Course } from "@/lib/firestoreTypes";
-import { formatCoursePriceText, listCourses } from "@/lib/firestoreService";
+import { listCourses } from "@/lib/firestoreService";
+import { CoursePriceDisplay } from "@/components/CoursePriceDisplay";
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -60,7 +61,6 @@ export default function HomePage() {
         {courses.map((course) => {
           const courseIdentifier = course.slug || course.id;
           const timeSlots = Array.isArray(course.timeSlots) ? course.timeSlots : [];
-          const priceText = formatCoursePriceText(course);
           const scheduleText =
             course.type === "oneOnOne" ? "每次 1 小時，08:30-09:30 可預約" : "每期 4 堂，團體每堂 2 小時";
 
@@ -69,7 +69,7 @@ export default function HomePage() {
               <p className="text-xs uppercase tracking-wide text-slate-500">{course.slug}</p>
               <h3 className="text-lg font-semibold">{course.name}</h3>
               <p className="text-sm text-slate-600">{course.description}</p>
-              <p className="text-sm">{priceText}</p>
+              <CoursePriceDisplay course={course} className="text-sm" />
               <p className="text-xs text-slate-500">時段：{timeSlots.join(" / ")}</p>
               <p className="text-xs text-slate-500">{scheduleText}</p>
               <Link

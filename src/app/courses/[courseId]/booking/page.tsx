@@ -6,13 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import { ContactPreference, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   calculateBookingAmount,
-  formatCoursePriceText,
   createBooking,
   getCourseById,
   listSessionClassDates,
   listOneOnOneSlots,
   listSessions,
 } from "@/lib/firestoreService";
+import { CoursePriceDisplay } from "@/components/CoursePriceDisplay";
 
 interface SlotInfo {
   id: string;
@@ -178,7 +178,6 @@ export default function BookingPage() {
   }, [courseId]);
 
   const amount = course ? calculateBookingAmount(course, isMember) : 0;
-  const priceText = course ? formatCoursePriceText(course) : "";
   const selectedSlotInfo = slots.find((slot) => slot.id === selectedSlot);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -417,7 +416,7 @@ export default function BookingPage() {
         </label>
 
         <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-normal text-slate-500">{priceText}</p>
+          <CoursePriceDisplay course={course} className="text-sm font-normal text-slate-500" />
           <p className="mt-1 text-base font-bold text-slate-950">
             本次報名金額：{`NT$${new Intl.NumberFormat("zh-TW").format(amount)}`}
           </p>

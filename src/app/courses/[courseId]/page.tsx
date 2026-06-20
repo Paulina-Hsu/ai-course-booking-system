@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
-import { formatCoursePriceText, getCourseById, listOneOnOneSlots, listSessionClassDates, listSessions } from "@/lib/firestoreService";
+import { getCourseById, listOneOnOneSlots, listSessionClassDates, listSessions } from "@/lib/firestoreService";
 import { getCourseDetailContent } from "@/lib/courseContent";
+import { CoursePriceDisplay } from "@/components/CoursePriceDisplay";
 
 function getSessionCapacity(session: Session): number {
   if (typeof session.capacity === "number" && Number.isFinite(session.capacity)) return session.capacity;
@@ -132,7 +133,6 @@ export default function CourseDetailPage() {
   const content = getCourseDetailContent(course);
   const groupSessions = terms.filter((term): term is Session => "courseId" in term);
   const oneOnOneSlots = terms.filter((term): term is OneOnOneSlot => !("courseId" in term));
-  const priceText = formatCoursePriceText(course);
   const scheduleText =
     course.type === "oneOnOne" ? "每次 1 小時，08:30-09:30 可預約" : "每期 4 堂，每堂 2 小時";
   const ctaText = course.type === "oneOnOne" ? "預約 1 對 1" : "立即報名";
@@ -157,7 +157,7 @@ export default function CourseDetailPage() {
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-medium text-slate-500">價格資訊</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{priceText}</p>
+            <CoursePriceDisplay course={course} className="mt-1 text-base font-semibold text-slate-900" />
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-medium text-slate-500">課程形式</p>
