@@ -142,8 +142,8 @@ service cloud.firestore {
       let capacity = sessionCapacity();
       return isGuest() &&
         changed.hasOnly(["enrolledCount", "isFull", "maxCapacity", "updatedAt", "status"]) &&
-        resource.data.isOpen != false &&
-        resource.data.isFull != true &&
+        (!("isOpen" in resource.data) || resource.data.isOpen != false) &&
+        (!("isFull" in resource.data) || resource.data.isFull != true) &&
         nextCount is number &&
         nextCount == sessionEnrolledCount() + 1 &&
         nextCount >= 0 &&
