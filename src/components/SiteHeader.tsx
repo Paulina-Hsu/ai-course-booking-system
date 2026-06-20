@@ -8,10 +8,6 @@ const navItems = [
   { href: "/courses", label: "課程列表" },
 ];
 
-const adminItems = [
-  { href: "/admin/login", label: "管理員登入" },
-];
-
 export function SiteHeader() {
   const pathname = usePathname();
   const isActive = (href: string) => {
@@ -31,16 +27,6 @@ export function SiteHeader() {
         </Link>
         <nav className="flex flex-wrap items-center justify-end gap-3 text-sm md:gap-6">
           {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={linkClassName(item.href)}
-              style={isActive(item.href) ? { backgroundColor: "#0f172a", color: "#ffffff" } : { color: "#0f172a" }}
-            >
-              {item.label}
-            </Link>
-          ))}
-          {adminItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
