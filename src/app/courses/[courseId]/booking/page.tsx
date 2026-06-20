@@ -416,9 +416,9 @@ export default function BookingPage() {
           />
         </label>
 
-        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-          <p>{priceText}</p>
-          <p className="mt-1 text-xs text-slate-500">
+        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-normal text-slate-500">{priceText}</p>
+          <p className="mt-1 text-base font-bold text-slate-950">
             本次報名金額：{`NT$${new Intl.NumberFormat("zh-TW").format(amount)}`}
           </p>
         </div>
