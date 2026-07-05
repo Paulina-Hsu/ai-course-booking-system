@@ -59,7 +59,21 @@ function getCourseSummary(course: Course) {
     return "每次 1 小時，08:30-09:30 可預約";
   }
 
-  return "每期 4 堂，每堂 2 小時";
+  const sessionsCount = course.sessionsCount || 4;
+  const duration = Number(course.durationMinutes || 120);
+  let durationText = "每堂 2 小時";
+
+  if (duration > 0 && duration < 10) {
+    durationText = `每堂 ${duration} 小時`;
+  } else if (duration >= 60 && duration % 60 === 0) {
+    durationText = `每堂 ${duration / 60} 小時`;
+  } else if (duration >= 60) {
+    durationText = `每堂 ${Number((duration / 60).toFixed(1))} 小時`;
+  } else if (duration > 0) {
+    durationText = `每堂 ${duration} 分鐘`;
+  }
+
+  return `每期 ${sessionsCount} 堂，${durationText}`;
 }
 
 export default function HomePage() {
