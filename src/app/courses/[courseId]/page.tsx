@@ -49,6 +49,31 @@ function getSessionClassDates(session: Session): string[] {
   return dates.length > 0 ? dates : firstDate ? [firstDate] : [];
 }
 
+function getCourseCapacity(course: Course): number {
+  if (typeof course.maxCapacity === "number" && Number.isFinite(course.maxCapacity)) return course.maxCapacity;
+  return 18;
+}
+
+function formatDurationText(course: Course): string {
+  if (course.type === "oneOnOne") return "每次 1 小時";
+
+  const duration = Number(course.durationMinutes || 120);
+  if (duration > 0 && duration < 10) return `每堂 ${duration} 小時`;
+  if (duration >= 60 && duration % 60 === 0) return `每堂 ${duration / 60} 小時`;
+  if (duration >= 60) return `每堂 ${Number((duration / 60).toFixed(1))} 小時`;
+  return `每堂 ${duration} 分鐘`;
+}
+
+function getCourseFormatText(course: Course): string {
+  if (course.type === "oneOnOne") return "1 對 1 專屬課程";
+  return `團班課程，最多 ${getCourseCapacity(course)} 位`;
+}
+
+function getScheduleText(course: Course): string {
+  if (course.type === "oneOnOne") return "每次 1 小時，08:30-09:30 可預約";
+  return `每期 ${course.sessionsCount || 4} 堂，${formatDurationText(course)}`;
+}
+
 export default function CourseDetailPage() {
   const params = useParams();
   const routeCourseId = Array.isArray(params.courseId) ? params.courseId[0] : params.courseId;
@@ -133,8 +158,7 @@ export default function CourseDetailPage() {
   const content = getCourseDetailContent(course);
   const groupSessions = terms.filter((term): term is Session => "courseId" in term);
   const oneOnOneSlots = terms.filter((term): term is OneOnOneSlot => !("courseId" in term));
-  const scheduleText =
-    course.type === "oneOnOne" ? "每次 1 小時，08:30-09:30 可預約" : "每期 4 堂，每堂 2 小時";
+  const scheduleText = getScheduleText(course);
   const ctaText = course.type === "oneOnOne" ? "預約 1 對 1" : "立即報名";
 
   return (
@@ -162,7 +186,7 @@ export default function CourseDetailPage() {
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-medium text-slate-500">課程形式</p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {course.type === "oneOnOne" ? "1 對 1 專屬課程" : "團班課程"}
+              {getCourseFormatText(course)}
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

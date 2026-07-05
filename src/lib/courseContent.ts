@@ -34,7 +34,7 @@ const courseDetails: Record<string, CourseDetailContent> = {
     ],
   },
   imageVideoCreation: {
-    intro: "聚焦 AI 圖像與影片創作流程，帶學員從畫面風格、角色一致性、腳本分鏡到短影音作品完成，提升視覺內容品質與創作效率。",
+    intro: "專為想加強圖片與影片創作的學員設計，學習 AI 圖像、視覺風格、短影音腳本與素材規劃，完成可用於社群或宣傳的作品。",
     audience: [
       "已有 AI 基礎，想加強圖片與影片創作的人",
       "想做社群短影音、課程宣傳、品牌內容的人",
@@ -57,7 +57,7 @@ const courseDetails: Record<string, CourseDetailContent> = {
     ],
   },
   saturdayElite: {
-    intro: "為平日不方便上課的學員設計，以週六時段完成精實的 AI 初階訓練，快速建立工具觀念、手機操作流程與實作基礎。",
+    intro: "為平日不方便上課的學員設計，以週六時段完成精實的 AI 初階訓練，快速建立 AI 工具觀念、手機操作流程與實作基礎。",
     audience: [
       "平日不方便上課的學員",
       "想利用週六密集學習 AI 的學員",
@@ -79,8 +79,31 @@ const courseDetails: Record<string, CourseDetailContent> = {
       "第 4 堂：AI 實作整合與成果完成",
     ],
   },
+  codexBasic: {
+    intro: "這是一門專為 AI 學習者、非工程背景者與程式新手設計的 Codex 入門課程。課程將帶領學員認識 AI Coding Agent 的基本概念，學習如何把自己的想法轉換成清楚的開發任務，並使用 Codex 協助完成簡單網站修改、功能新增、錯誤排查與作品發布。",
+    audience: [
+      "想學會使用 Codex 協助完成網站或系統修改的人",
+      "沒有程式背景，但希望能把想法做成第一個網站的人",
+      "已經會使用 AI 工具，想進一步學習 AI Coding Agent 的學員",
+      "想提升工作、教學、社群經營或個人專案製作效率的人",
+    ],
+    outcomeTitle: "學習目標",
+    outcomes: [
+      "了解 Codex 與 AI Coding Agent 的基本概念與安全使用方式",
+      "學會把需求整理成清楚、可執行的任務指令",
+      "能使用 Codex 協助修改網頁內容、樣式與基本功能",
+      "完成一個可展示的簡單網站作品，並理解後續維護流程",
+    ],
+    curriculumTitle: "4 堂課程內容",
+    curriculum: [
+      "第 1 堂：Codex 入門與 AI Coding Agent 基礎觀念",
+      "第 2 堂：把想法整理成任務，學會與 Codex 協作修改網頁",
+      "第 3 堂：實作網站內容、版面、表單與錯誤排查",
+      "第 4 堂：完成第一個網站作品，整理發布與後續維護方式",
+    ],
+  },
   oneOnOne: {
-    intro: "依照學員程度、需求與目標客製化教學，協助釐清學習方向、改善實作問題，並將 AI 應用落實到工作、學習、創作或個人任務。",
+    intro: "依照學員程度、需求與目標客製化教學，可針對個人工作、學習、創作、簡報、社群經營、課程準備或實際問題進行一對一指導。",
     audience: [
       "希望依照個人需求客製化學習的學員",
       "有特定問題需要老師協助排解的人",
@@ -115,15 +138,19 @@ function normalize(value: string) {
 export function getCourseDetailContent(course: Course): CourseDetailContent {
   const keyText = normalize(`${course.slug || ""} ${course.id || ""} ${course.name || ""}`);
 
-  if (course.type === "oneOnOne" || keyText.includes("1-對-1") || keyText.includes("oneonone")) {
+  if (course.type === "oneOnOne" || keyText.includes("one-on-one") || keyText.includes("oneonone") || keyText.includes("1-對-1") || keyText.includes("一對一")) {
     return courseDetails.oneOnOne;
   }
 
-  if (keyText.includes("圖影") || keyText.includes("image") || keyText.includes("video") || keyText.includes("creative")) {
+  if (keyText.includes("codex") || keyText.includes("初階實戰")) {
+    return courseDetails.codexBasic;
+  }
+
+  if (keyText.includes("image") || keyText.includes("video") || keyText.includes("creation") || keyText.includes("圖影創作")) {
     return courseDetails.imageVideoCreation;
   }
 
-  if (keyText.includes("週六") || keyText.includes("saturday") || keyText.includes("elite")) {
+  if (keyText.includes("saturday") || keyText.includes("elite") || keyText.includes("週六菁英")) {
     return courseDetails.saturdayElite;
   }
 
