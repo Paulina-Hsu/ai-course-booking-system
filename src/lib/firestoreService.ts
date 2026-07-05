@@ -23,6 +23,7 @@ import {
   Course,
   CourseType,
   Member,
+  MemberCheckStatus,
   MemberStatus,
   OneOnOneSlot,
   Session,
@@ -226,6 +227,16 @@ export async function listMembers(): Promise<Member[]> {
       const keyB = b.memberNo || b.name || b.phone || "";
       return keyA.localeCompare(keyB, "zh-TW", { numeric: true });
     });
+}
+
+export async function getMemberByPhone(phone: string): Promise<Member | null> {
+  if (!isFirebaseReady) return null;
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return null;
+  const firestore = ensureDb();
+  const snap = await getDoc(doc(firestore, "members", `phone_${normalizedPhone}`));
+  if (!snap.exists()) return null;
+  return mapDoc<Member>(snap);
 }
 
 export async function upsertMembers(inputs: ImportMemberInput[]): Promise<MemberImportResult> {
@@ -815,6 +826,10 @@ export interface CreateBookingInput {
   aiLevel?: string;
   learningGoal?: string;
   isMember: boolean;
+  requestedMember?: boolean;
+  memberCheckStatus?: MemberCheckStatus;
+  matchedMemberId?: string;
+  memberCheckMessage?: string;
   sessionId?: string;
   oneOnOneSlotId?: string;
   note?: string;
@@ -894,6 +909,11 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
           aiLevel: input.aiLevel,
           learningGoal: input.learningGoal?.trim() || undefined,
           isMember: input.isMember,
+          requestedMember: input.requestedMember ?? input.isMember,
+          memberCheckStatus: input.memberCheckStatus,
+          matchedMemberId: input.matchedMemberId,
+          memberCheckMessage: input.memberCheckMessage,
+          memberCheckedAt: input.memberCheckStatus ? serverTimestamp() : undefined,
           amount,
           note: input.note,
           status: "pending",
@@ -965,6 +985,11 @@ export async function createBooking(input: CreateBookingInput): Promise<string> 
           aiLevel: input.aiLevel,
           learningGoal: input.learningGoal?.trim() || undefined,
           isMember: input.isMember,
+          requestedMember: input.requestedMember ?? input.isMember,
+          memberCheckStatus: input.memberCheckStatus,
+          matchedMemberId: input.matchedMemberId,
+          memberCheckMessage: input.memberCheckMessage,
+          memberCheckedAt: input.memberCheckStatus ? serverTimestamp() : undefined,
           amount,
           note: input.note,
           status: "pending",

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference } from "@/lib/firestoreTypes";
+import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference, MemberCheckStatus } from "@/lib/firestoreTypes";
 import {
   formatSessionLabel,
   getBookingById,
@@ -23,6 +23,13 @@ const contactPreferenceMap: Record<ContactPreference, string> = {
   phone: "手機",
   email: "Email",
   line: "LINE",
+};
+const memberCheckStatusMap: Record<MemberCheckStatus, string> = {
+  not_requested: "未選擇會員",
+  matched: "已核對會員",
+  not_found: "查無會員",
+  inactive: "會員狀態非有效",
+  manual_review: "待人工確認",
 };
 
 function formatCurrency(value: number) {
@@ -108,7 +115,9 @@ function BookingSuccessContent() {
           <p>學習需求或備註：{displayValue(details.booking.learningGoal)}</p>
           <p>課程：{details.courseName}</p>
           <p>期別 / 時段：{details.sessionLabel}</p>
-          <p>會員：{details.booking.isMember ? "是" : "否"}</p>
+          <p>自填會員：{(details.booking.requestedMember ?? details.booking.isMember) ? "是" : "否"}</p>
+          <p>會員核對：{details.booking.memberCheckStatus ? memberCheckStatusMap[details.booking.memberCheckStatus] : "未核對"}</p>
+          <p>實際套用會員價：{details.booking.isMember ? "是" : "否"}</p>
           <p>金額：{formatCurrency(details.booking.amount)}</p>
           <p>狀態：{statusMap[details.booking.status] || "待確認"}</p>
         </div>

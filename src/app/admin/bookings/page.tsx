@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
+import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference, Course, MemberCheckStatus, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   formatSessionLabel,
   listBookings,
@@ -26,6 +26,13 @@ const adminStatusLabelMap: Record<BookingStatus, string> = {
   paid: "已付款（已確認）",
   cancelled: "已取消",
   waitlist: "候補",
+};
+const memberCheckStatusMap: Record<MemberCheckStatus, string> = {
+  not_requested: "未選擇會員",
+  matched: "已核對會員",
+  not_found: "查無會員",
+  inactive: "會員狀態非有效",
+  manual_review: "待人工確認",
 };
 
 function buildCsv(rows: string[][], headers: string[]) {
@@ -129,7 +136,9 @@ export default function AdminBookingsPage() {
       "期別",
       "狀態",
       "金額",
-      "會員",
+      "自填會員",
+      "會員核對",
+      "實際套用會員價",
       "建立時間",
     ];
     const rows = bookings.map((booking) => [
@@ -149,6 +158,8 @@ export default function AdminBookingsPage() {
           : "",
       statusMap[booking.status] || booking.status,
       `${booking.amount}`,
+      (booking.requestedMember ?? booking.isMember) ? "是" : "否",
+      booking.memberCheckStatus ? memberCheckStatusMap[booking.memberCheckStatus] : "未核對",
       booking.isMember ? "是" : "否",
       String((booking.createdAt as { toDate?: () => Date } | undefined)?.toDate?.() || ""),
     ]);
@@ -238,7 +249,7 @@ export default function AdminBookingsPage() {
       {loading ? <p>讀取中...</p> : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1500px] table-fixed border border-slate-200 bg-white text-sm">
+        <table className="w-full min-w-[1740px] table-fixed border border-slate-200 bg-white text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
               <th className="border border-slate-200 px-3 py-2">學員</th>
@@ -252,6 +263,7 @@ export default function AdminBookingsPage() {
               <th className="border border-slate-200 px-3 py-2">課程</th>
               <th className="border border-slate-200 px-3 py-2">期別</th>
               <th className="border border-slate-200 px-3 py-2">金額</th>
+              <th className="border border-slate-200 px-3 py-2">會員核對</th>
               <th className="border border-slate-200 px-3 py-2">狀態</th>
             </tr>
           </thead>
@@ -277,6 +289,13 @@ export default function AdminBookingsPage() {
                   </span>
                 </td>
                 <td className="border border-slate-200 px-3 py-2">{formatBookingAmount(booking.amount)}</td>
+                <td className="border border-slate-200 px-3 py-2">
+                  <div className="space-y-1">
+                    <p>自填：{(booking.requestedMember ?? booking.isMember) ? "會員" : "非會員"}</p>
+                    <p>核對：{booking.memberCheckStatus ? memberCheckStatusMap[booking.memberCheckStatus] : "未核對"}</p>
+                    <p>套用：{booking.isMember ? "會員價" : "非會員價"}</p>
+                  </div>
+                </td>
                 <td className="border border-slate-200 px-3 py-2">
                   <select
                     className="w-full rounded border border-slate-300 px-2 py-1"

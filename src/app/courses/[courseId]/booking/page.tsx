@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ContactPreference, Course, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
+import { ContactPreference, Course, MemberCheckStatus, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   calculateBookingAmount,
   createBooking,
   getCourseById,
+  getMemberByPhone,
   listSessionClassDates,
   listOneOnOneSlots,
   listSessions,
+  normalizeMemberPhone,
 } from "@/lib/firestoreService";
 import { CoursePriceDisplay } from "@/components/CoursePriceDisplay";
 
@@ -46,6 +48,14 @@ const aiLevelOptions = [
   "已經常使用，想進階",
   "想針對工作 / 創作 / 教學深入應用",
 ];
+
+const memberCheckLabels: Record<MemberCheckStatus, string> = {
+  not_requested: "未選擇會員",
+  matched: "已核對會員",
+  not_found: "查無會員",
+  inactive: "會員狀態非有效",
+  manual_review: "待人工確認",
+};
 
 function getSessionCapacity(session: Session): number {
   if (typeof session.capacity === "number" && Number.isFinite(session.capacity)) return session.capacity;
@@ -116,6 +126,10 @@ export default function BookingPage() {
   const [aiLevel, setAiLevel] = useState("");
   const [learningGoal, setLearningGoal] = useState("");
   const [isMember, setIsMember] = useState(false);
+  const [memberCheckStatus, setMemberCheckStatus] = useState<MemberCheckStatus>("not_requested");
+  const [memberCheckMessage, setMemberCheckMessage] = useState("未選擇會員，將以非會員價計算。");
+  const [matchedMemberId, setMatchedMemberId] = useState("");
+  const [isCheckingMember, setIsCheckingMember] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [loading, setLoading] = useState(false);
   const [isLoadingCourse, setIsLoadingCourse] = useState(true);
@@ -177,7 +191,63 @@ export default function BookingPage() {
     void init();
   }, [courseId]);
 
-  const amount = course ? calculateBookingAmount(course, isMember) : 0;
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      const normalizedPhone = normalizeMemberPhone(phone);
+
+      if (!isMember) {
+        setMemberCheckStatus("not_requested");
+        setMemberCheckMessage("未選擇會員，將以非會員價計算。");
+        setMatchedMemberId("");
+        setIsCheckingMember(false);
+        return;
+      }
+
+      if (normalizedPhone.length < 8) {
+        setMemberCheckStatus("manual_review");
+        setMemberCheckMessage("請輸入手機號碼，系統會用手機自動核對會員資格。");
+        setMatchedMemberId("");
+        setIsCheckingMember(false);
+        return;
+      }
+
+      setIsCheckingMember(true);
+      try {
+        const member = await getMemberByPhone(normalizedPhone);
+        if (!member) {
+          setMemberCheckStatus("not_found");
+          setMemberCheckMessage("查無桃園市AI推廣教育協會會員資料，將以非會員價送出；若資料有誤，管理員可於後台人工確認。");
+          setMatchedMemberId("");
+          return;
+        }
+
+        if (member.status === "active") {
+          setMemberCheckStatus("matched");
+          setMemberCheckMessage(`已核對為有效會員：${member.name || "會員"}，本次報名將使用會員價。`);
+          setMatchedMemberId(member.id);
+          return;
+        }
+
+        setMemberCheckStatus("inactive");
+        setMemberCheckMessage(`找到會員資料，但狀態為「${member.statusLabel || member.status}」，將以非會員價送出並供後台確認。`);
+        setMatchedMemberId(member.id);
+      } catch (memberError) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("[BookingPage] member check failed", memberError instanceof Error ? memberError.message : memberError);
+        }
+        setMemberCheckStatus("manual_review");
+        setMemberCheckMessage("會員資格暫時無法自動核對，將以非會員價送出並供後台人工確認。");
+        setMatchedMemberId("");
+      } finally {
+        setIsCheckingMember(false);
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [isMember, phone]);
+
+  const effectiveIsMember = isMember && memberCheckStatus === "matched";
+  const amount = course ? calculateBookingAmount(course, effectiveIsMember) : 0;
   const selectedSlotInfo = slots.find((slot) => slot.id === selectedSlot);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -218,7 +288,11 @@ export default function BookingPage() {
         ageRange,
         aiLevel,
         learningGoal: learningGoal.trim() || undefined,
-        isMember,
+        isMember: effectiveIsMember,
+        requestedMember: isMember,
+        memberCheckStatus: isMember ? memberCheckStatus : "not_requested",
+        matchedMemberId: matchedMemberId || undefined,
+        memberCheckMessage,
       };
 
       const bookingId = await createBooking(
@@ -285,7 +359,14 @@ export default function BookingPage() {
             required
             className="rounded-lg border border-slate-300 px-3 py-2"
             value={phone}
-            onChange={(event) => setPhone(event.target.value)}
+            onChange={(event) => {
+              setPhone(event.target.value);
+              if (isMember) {
+                setMemberCheckStatus("manual_review");
+                setMemberCheckMessage("手機號碼已變更，正在重新核對會員資格。");
+                setMatchedMemberId("");
+              }
+            }}
             placeholder="0912-345-678"
           />
         </label>
@@ -367,13 +448,28 @@ export default function BookingPage() {
           會員/非會員
           <select
             value={isMember ? "member" : "non-member"}
-            onChange={(event) => setIsMember(event.target.value === "member")}
+            onChange={(event) => {
+              const nextIsMember = event.target.value === "member";
+              setIsMember(nextIsMember);
+              setMemberCheckStatus(nextIsMember ? "manual_review" : "not_requested");
+              setMemberCheckMessage(nextIsMember ? "正在核對會員資格。" : "未選擇會員，將以非會員價計算。");
+              setMatchedMemberId("");
+            }}
             className="rounded-lg border border-slate-300 px-3 py-2"
           >
             <option value="non-member">非會員</option>
             <option value="member">會員</option>
           </select>
         </label>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="font-semibold text-slate-800">
+            會員核對：{isCheckingMember ? "核對中..." : memberCheckLabels[memberCheckStatus]}
+          </p>
+          <p className={memberCheckStatus === "matched" ? "mt-1 text-emerald-700" : "mt-1 text-amber-700"}>
+            {memberCheckMessage}
+          </p>
+        </div>
 
         <label className="flex flex-col gap-2 text-sm">
           期別/時段
@@ -420,6 +516,11 @@ export default function BookingPage() {
           <p className="mt-1 text-base font-bold text-slate-950">
             本次報名金額：{`NT$${new Intl.NumberFormat("zh-TW").format(amount)}`}
           </p>
+          {isMember && memberCheckStatus !== "matched" ? (
+            <p className="mt-1 text-sm text-amber-700">
+              會員資格尚未核對成功，本次會先以非會員價送出，後台會保留核對結果。
+            </p>
+          ) : null}
         </div>
 
         <div className="md:col-span-2">
@@ -427,9 +528,9 @@ export default function BookingPage() {
             type="submit"
             className="w-full rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white"
             style={{ backgroundColor: "#0f172a", color: "#ffffff" }}
-            disabled={loading}
+            disabled={loading || isCheckingMember}
           >
-            {loading ? "送出中..." : "送出報名"}
+            {loading ? "送出中..." : isCheckingMember ? "會員核對中..." : "送出報名"}
           </button>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         </div>

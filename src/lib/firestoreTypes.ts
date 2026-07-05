@@ -8,6 +8,8 @@ export type SessionStatus = "open" | "closed";
 
 export type MemberStatus = "active" | "inactive" | "expired" | "unknown";
 
+export type MemberCheckStatus = "not_requested" | "matched" | "not_found" | "inactive" | "manual_review";
+
 export interface FirestoreMeta {
   id?: string;
   createdAt?: unknown;
@@ -92,6 +94,11 @@ export interface Booking extends FirestoreMeta {
   aiLevel?: string;
   learningGoal?: string;
   isMember: boolean;
+  requestedMember?: boolean;
+  memberCheckStatus?: MemberCheckStatus;
+  matchedMemberId?: string;
+  memberCheckMessage?: string;
+  memberCheckedAt?: unknown;
   amount: number;
   status: BookingStatus;
   note?: string;
