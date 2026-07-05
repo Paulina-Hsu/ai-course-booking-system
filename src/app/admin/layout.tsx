@@ -7,6 +7,7 @@ const adminMenus = [
   { href: "/admin/sessions", label: "期別管理" },
   { href: "/admin/one-on-one", label: "1 對 1 管理" },
   { href: "/admin/bookings", label: "報名管理" },
+  { href: "/admin/members", label: "會員管理" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -197,6 +197,10 @@ service cloud.firestore {
       allow list, update, delete: if isAdmin();
     }
 
+    match /members/{memberId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /admins/{uid} {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
     }

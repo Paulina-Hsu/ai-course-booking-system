@@ -6,6 +6,8 @@ export type CourseType = "group" | "oneOnOne";
 
 export type SessionStatus = "open" | "closed";
 
+export type MemberStatus = "active" | "inactive" | "expired" | "unknown";
+
 export interface FirestoreMeta {
   id?: string;
   createdAt?: unknown;
@@ -99,6 +101,20 @@ export interface Admin {
   id: string;
   email: string;
   role: "admin";
+}
+
+export interface Member extends FirestoreMeta {
+  id: string;
+  memberNo?: string;
+  name: string;
+  phone?: string;
+  normalizedPhone?: string;
+  email?: string;
+  status: MemberStatus;
+  statusLabel: string;
+  note?: string;
+  joinedAt?: unknown;
+  importedAt?: unknown;
 }
 
 export interface Settings extends FirestoreMeta {

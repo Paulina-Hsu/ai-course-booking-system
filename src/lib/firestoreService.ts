@@ -9,6 +9,7 @@
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   Timestamp,
   Transaction,
   updateDoc,
@@ -21,6 +22,8 @@ import {
   ContactPreference,
   Course,
   CourseType,
+  Member,
+  MemberStatus,
   OneOnOneSlot,
   Session,
 } from "./firestoreTypes";
@@ -37,6 +40,8 @@ const ensureDb = () => {
 };
 
 const normalizePhone = (phone: string) => phone.replace(/[^0-9]/g, "");
+
+export const normalizeMemberPhone = normalizePhone;
 
 async function createPublicBookingKey(scope: "session" | "oneOnOne", targetId: string, normalizedPhone: string): Promise<string> {
   const source = `${scope}:${targetId}:${normalizedPhone}`;
@@ -142,6 +147,135 @@ function getSessionCapacity(session: Session): number {
 function cleanPayload(payload: Record<string, unknown>) {
   const entries = Object.entries(payload).filter(([, value]) => value !== undefined);
   return Object.fromEntries(entries);
+}
+
+function parseMemberJoinedAt(value: unknown): Timestamp | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return Timestamp.fromDate(value);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    return Timestamp.fromDate(new Date(excelEpoch + value * 24 * 60 * 60 * 1000));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const normalized = trimmed.replace(/\./g, "/").replace(/-/g, "/");
+    const date = new Date(normalized);
+    if (!Number.isNaN(date.getTime())) {
+      return Timestamp.fromDate(date);
+    }
+  }
+  return undefined;
+}
+
+function resolveMemberStatus(statusLabel?: string): { status: MemberStatus; statusLabel: string } {
+  const label = (statusLabel || "").trim();
+  const normalized = label.toLowerCase().replace(/\s+/g, "");
+
+  if (!normalized || ["有效", "正常", "啟用", "active", "valid"].includes(normalized)) {
+    return { status: "active", statusLabel: label || "有效" };
+  }
+
+  if (["停用", "停權", "inactive", "disabled"].includes(normalized)) {
+    return { status: "inactive", statusLabel: label || "停用" };
+  }
+
+  if (["到期", "過期", "expired"].includes(normalized)) {
+    return { status: "expired", statusLabel: label || "到期" };
+  }
+
+  return { status: "unknown", statusLabel: label || "未設定" };
+}
+
+function buildMemberDocumentId(input: ImportMemberInput): string {
+  const normalizedPhone = normalizePhone(input.phone || "");
+  if (normalizedPhone) return `phone_${normalizedPhone}`;
+
+  const memberNo = (input.memberNo || "").trim();
+  if (memberNo) return `member_${memberNo.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+  throw new Error("會員資料缺少手機或編號，無法建立 Firestore 文件 ID");
+}
+
+export interface ImportMemberInput {
+  memberNo?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  statusLabel?: string;
+  note?: string;
+  joinedAt?: unknown;
+}
+
+export interface MemberImportResult {
+  importedCount: number;
+  skippedCount: number;
+  errors: string[];
+}
+
+export async function listMembers(): Promise<Member[]> {
+  if (!isFirebaseReady) return [] as Member[];
+  const firestore = ensureDb();
+  const snapshot = await getDocs(collection(firestore, "members"));
+  return snapshot.docs
+    .map((docRef) => mapDoc<Member>(docRef))
+    .sort((a, b) => {
+      const keyA = a.memberNo || a.name || a.phone || "";
+      const keyB = b.memberNo || b.name || b.phone || "";
+      return keyA.localeCompare(keyB, "zh-TW", { numeric: true });
+    });
+}
+
+export async function upsertMembers(inputs: ImportMemberInput[]): Promise<MemberImportResult> {
+  if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
+  const firestore = ensureDb();
+  const errors: string[] = [];
+  let importedCount = 0;
+  let skippedCount = 0;
+
+  for (const [index, input] of inputs.entries()) {
+    try {
+      const memberNo = (input.memberNo || "").trim();
+      const name = (input.name || "").trim();
+      const phone = (input.phone || "").trim();
+      const normalizedPhone = normalizePhone(phone);
+
+      if (!memberNo && !normalizedPhone) {
+        skippedCount += 1;
+        errors.push(`第 ${index + 2} 列缺少會員編號或手機，已略過`);
+        continue;
+      }
+
+      const statusInfo = resolveMemberStatus(input.statusLabel);
+      const memberRef = doc(firestore, "members", buildMemberDocumentId(input));
+      await setDoc(
+        memberRef,
+        cleanPayload({
+          memberNo: memberNo || undefined,
+          name: name || "未填寫",
+          phone: phone || undefined,
+          normalizedPhone: normalizedPhone || undefined,
+          email: input.email?.trim() || undefined,
+          status: statusInfo.status,
+          statusLabel: statusInfo.statusLabel,
+          note: input.note?.trim() || undefined,
+          joinedAt: parseMemberJoinedAt(input.joinedAt),
+          importedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true },
+      );
+      importedCount += 1;
+    } catch (error) {
+      skippedCount += 1;
+      const message = error instanceof Error ? error.message : "未知錯誤";
+      errors.push(`第 ${index + 2} 列匯入失敗：${message}`);
+    }
+  }
+
+  return { importedCount, skippedCount, errors };
 }
 
 type LegacyCourseRecord = Partial<
