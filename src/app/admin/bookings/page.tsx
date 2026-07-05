@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference, Course, MemberCheckStatus, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
   formatSessionLabel,
+  deleteBooking,
   listBookings,
   listCourses,
   listOneOnOneSlots,
@@ -183,6 +184,19 @@ export default function AdminBookingsPage() {
     }
   };
 
+  const onDeleteBooking = async (booking: Booking & { id: string }) => {
+    const confirmed = window.confirm(`確定要刪除「${booking.name}」的報名資料嗎？此操作會釋放名額或 1 對 1 時段，且無法復原。`);
+    if (!confirmed) return;
+
+    try {
+      setActionError("");
+      await deleteBooking(booking.id);
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "刪除失敗");
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center justify-between">
@@ -249,7 +263,7 @@ export default function AdminBookingsPage() {
       {loading ? <p>讀取中...</p> : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1740px] table-fixed border border-slate-200 bg-white text-sm">
+        <table className="w-full min-w-[1860px] table-fixed border border-slate-200 bg-white text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
               <th className="border border-slate-200 px-3 py-2">學員</th>
@@ -265,6 +279,7 @@ export default function AdminBookingsPage() {
               <th className="border border-slate-200 px-3 py-2">金額</th>
               <th className="border border-slate-200 px-3 py-2">會員核對</th>
               <th className="border border-slate-200 px-3 py-2">狀態</th>
+              <th className="border border-slate-200 px-3 py-2">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -308,6 +323,15 @@ export default function AdminBookingsPage() {
                       </option>
                     ))}
                   </select>
+                </td>
+                <td className="border border-slate-200 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => onDeleteBooking(booking)}
+                    className="rounded-full border border-rose-300 px-3 py-1 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                  >
+                    刪除
+                  </button>
                 </td>
               </tr>
             ))}

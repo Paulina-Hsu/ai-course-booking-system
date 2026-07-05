@@ -1101,6 +1101,76 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
     }));
   });
 }
+
+export async function deleteBooking(bookingId: string): Promise<void> {
+  if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
+  const firestore = ensureDb();
+  const bookingRef = doc(firestore, "bookings", bookingId);
+
+  await runTransaction(firestore, async (tx: Transaction) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists()) throw new Error("找不到報名資料");
+
+    const booking = bookingSnap.data() as Booking;
+    const wasUsingCapacity = doesStatusUseCapacity(booking.status);
+
+    if (booking.sessionId && wasUsingCapacity) {
+      const sessionRef = doc(firestore, "sessions", booking.sessionId);
+      const sessionSnap = await tx.get(sessionRef);
+
+      if (sessionSnap.exists()) {
+        const session = sessionSnap.data() as Session;
+        const capacity = getSessionCapacity(session);
+        const enrolledCount = Math.max(Number(session.enrolledCount || 0) - 1, 0);
+
+        tx.update(sessionRef, cleanPayload({
+          enrolledCount,
+          isFull: enrolledCount >= capacity,
+          status: enrolledCount >= capacity ? "closed" : "open",
+          maxCapacity: capacity,
+          updatedAt: serverTimestamp(),
+        }));
+      }
+    }
+
+    if (booking.oneOnOneSlotId && wasUsingCapacity) {
+      const slotRef = doc(firestore, "oneOnOneSlots", booking.oneOnOneSlotId);
+      const slotSnap = await tx.get(slotRef);
+
+      if (slotSnap.exists()) {
+        const slot = slotSnap.data() as OneOnOneSlot;
+        if (slot.bookingId === bookingId) {
+          tx.update(slotRef, cleanPayload({
+            isBooked: false,
+            studentPhone: null,
+            bookingId: null,
+            updatedAt: serverTimestamp(),
+          }));
+        }
+      }
+    }
+
+    if (booking.sessionId) {
+      const bookingKeyRef = doc(
+        firestore,
+        "bookingKeys",
+        await createPublicBookingKey("session", `${booking.courseId}:${booking.sessionId}`, normalizePhone(booking.phone)),
+      );
+      tx.delete(bookingKeyRef);
+    }
+
+    if (booking.oneOnOneSlotId) {
+      const bookingKeyRef = doc(
+        firestore,
+        "bookingKeys",
+        await createPublicBookingKey("oneOnOne", `${booking.courseId}:${booking.oneOnOneSlotId}`, normalizePhone(booking.phone)),
+      );
+      tx.delete(bookingKeyRef);
+    }
+
+    tx.delete(bookingRef);
+  });
+}
 export async function getBookingCounts() {
   const bookings = await listBookings();
   return bookings.reduce(
