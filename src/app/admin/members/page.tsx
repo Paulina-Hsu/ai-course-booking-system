@@ -122,7 +122,7 @@ export default function AdminMembersPage() {
         defval: "",
       });
       setPreviewRows(rows.map(mapExcelRowToMember));
-      setMessage(`已解析 ${file.name}，請確認預覽資料後再匯入 Firestore。`);
+      setMessage(`已解析 ${file.name}，請確認預覽資料後再同步 Firestore。`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Excel 解析失敗";
       setErrorMessage(`Excel 解析失敗：${message}`);
@@ -140,13 +140,13 @@ export default function AdminMembersPage() {
     try {
       const result = await upsertMembers(previewRows);
       await refreshMembers();
-      setMessage(`匯入完成：成功 ${result.importedCount} 筆，略過 ${result.skippedCount} 筆。`);
+      setMessage(`同步完成：新增/更新 ${result.importedCount} 筆，略過 ${result.skippedCount} 筆，標記停用 ${result.deactivatedCount} 筆。`);
       if (result.errors.length > 0) {
         setErrorMessage(result.errors.slice(0, 10).join("\n"));
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "匯入失敗";
-      setErrorMessage(`匯入失敗：${message}`);
+      const message = error instanceof Error ? error.message : "同步失敗";
+      setErrorMessage(`同步失敗：${message}`);
     } finally {
       setIsImporting(false);
     }
@@ -159,7 +159,7 @@ export default function AdminMembersPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Members</p>
           <h1 className="text-3xl font-bold text-slate-950">會員管理</h1>
           <p className="mt-2 text-slate-600">
-            上傳 Excel 會員名單，預覽確認後寫入 Firestore members collection。
+            上傳 Excel 會員名單，預覽確認後同步 Firestore members collection。
           </p>
         </div>
       </div>
@@ -178,7 +178,7 @@ export default function AdminMembersPage() {
               className="mt-2 block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-900"
             />
             <p className="mt-2 text-sm text-slate-500">
-              支援欄位：編號、姓名、手機、email、狀態、備註、入會日期。手機可空白，但日後自動會員核對會優先使用手機比對。
+              支援欄位：編號、姓名、手機、email、狀態、備註、入會日期。新版 Excel 裡沒有出現的既有會員會標記為停用，不會刪除。
             </p>
           </div>
           <button
@@ -187,7 +187,7 @@ export default function AdminMembersPage() {
             disabled={previewStats.validRows === 0 || isImporting || isParsing}
             className="rounded-full bg-slate-900 px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {isImporting ? "匯入中..." : "匯入 Firestore"}
+            {isImporting ? "同步中..." : "同步 Firestore"}
           </button>
         </div>
 
@@ -197,7 +197,7 @@ export default function AdminMembersPage() {
               檔案：<span className="font-semibold">{selectedFileName}</span>
             </p>
             <p>總列數：{previewStats.totalRows}</p>
-            <p>可匯入：{previewStats.validRows}</p>
+            <p>可同步：{previewStats.validRows}</p>
             <p>缺手機：{previewStats.missingPhoneCount}</p>
             <p>重複手機：{previewStats.duplicatePhoneCount}</p>
           </div>
@@ -215,7 +215,7 @@ export default function AdminMembersPage() {
 
       {previewRows.length > 0 && (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-950">匯入預覽</h2>
+          <h2 className="text-xl font-bold text-slate-950">同步預覽</h2>
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead className="bg-slate-100 text-slate-700">
@@ -245,7 +245,7 @@ export default function AdminMembersPage() {
             </table>
           </div>
           {previewRows.length > 20 && (
-            <p className="mt-3 text-sm text-slate-500">預覽只顯示前 20 筆，匯入時會處理全部資料。</p>
+            <p className="mt-3 text-sm text-slate-500">預覽只顯示前 20 筆，同步時會處理全部資料。</p>
           )}
         </section>
       )}

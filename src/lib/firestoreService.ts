@@ -213,6 +213,7 @@ export interface ImportMemberInput {
 export interface MemberImportResult {
   importedCount: number;
   skippedCount: number;
+  deactivatedCount: number;
   errors: string[];
 }
 
@@ -243,8 +244,10 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
   if (!isFirebaseReady) throw new Error("Firebase 尚未設定");
   const firestore = ensureDb();
   const errors: string[] = [];
+  const importedMemberIds = new Set<string>();
   let importedCount = 0;
   let skippedCount = 0;
+  let deactivatedCount = 0;
 
   for (const [index, input] of inputs.entries()) {
     try {
@@ -261,6 +264,7 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
 
       const statusInfo = resolveMemberStatus(input.statusLabel);
       const memberRef = doc(firestore, "members", buildMemberDocumentId(input));
+      importedMemberIds.add(memberRef.id);
       await setDoc(
         memberRef,
         cleanPayload({
@@ -286,7 +290,22 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
     }
   }
 
-  return { importedCount, skippedCount, errors };
+  const existingMembers = await getDocs(collection(firestore, "members"));
+  for (const memberDoc of existingMembers.docs) {
+    if (importedMemberIds.has(memberDoc.id)) continue;
+
+    const member = memberDoc.data() as Member;
+    if (member.status === "inactive" && member.statusLabel === "已停用（不在最新 Excel）") continue;
+
+    await updateDoc(doc(firestore, "members", memberDoc.id), cleanPayload({
+      status: "inactive",
+      statusLabel: "已停用（不在最新 Excel）",
+      updatedAt: serverTimestamp(),
+    }));
+    deactivatedCount += 1;
+  }
+
+  return { importedCount, skippedCount, deactivatedCount, errors };
 }
 
 type LegacyCourseRecord = Partial<
