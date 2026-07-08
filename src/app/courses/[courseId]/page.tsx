@@ -100,7 +100,7 @@ export default function CourseDetailPage() {
 
       try {
         const foundCourse = await getCourseById(courseId);
-        if (!foundCourse) {
+        if (!foundCourse || foundCourse.isActive === false || foundCourse.type === "oneOnOne") {
           setNotFound(true);
           return;
         }
@@ -314,3 +314,4 @@ export default function CourseDetailPage() {
     </section>
   );
 }
+

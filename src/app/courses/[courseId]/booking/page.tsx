@@ -152,7 +152,7 @@ export default function BookingPage() {
 
       try {
         const foundCourse = await getCourseById(courseId);
-        if (!foundCourse) {
+        if (!foundCourse || foundCourse.isActive === false || foundCourse.type === "oneOnOne") {
           setNotFound(true);
           return;
         }
@@ -543,3 +543,4 @@ export default function BookingPage() {
     </section>
   );
 }
+

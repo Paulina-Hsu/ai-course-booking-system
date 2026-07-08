@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -80,7 +80,7 @@ export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
 
   useEffect(() => {
-    listCourses().then(setCourses);
+    listCourses().then((courseData) => setCourses(courseData.filter((course) => course.type !== "oneOnOne")));
   }, []);
 
   return (
@@ -271,3 +271,4 @@ export default function HomePage() {
     </section>
   );
 }
+

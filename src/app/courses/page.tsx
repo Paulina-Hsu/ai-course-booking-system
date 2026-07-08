@@ -10,7 +10,7 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
 
   useEffect(() => {
-    listCourses().then(setCourses);
+    listCourses().then((courseData) => setCourses(courseData.filter((course) => course.type !== "oneOnOne")));
   }, []);
 
   return (
@@ -64,3 +64,4 @@ export default function CoursesPage() {
     </section>
   );
 }
+
