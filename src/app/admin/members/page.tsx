@@ -8,9 +8,17 @@ import {
   normalizeMemberPhone,
   upsertMembers,
 } from "@/lib/firestoreService";
-import { Member } from "@/lib/firestoreTypes";
+import { Member, MemberStatus } from "@/lib/firestoreTypes";
 
 type ExcelRow = Record<string, unknown>;
+
+const memberStatusOptions: { value: MemberStatus | ""; label: string }[] = [
+  { value: "", label: "全部狀態" },
+  { value: "active", label: "有效" },
+  { value: "inactive", label: "停用" },
+  { value: "expired", label: "到期" },
+  { value: "unknown", label: "未知" },
+];
 
 const getCellText = (row: ExcelRow, keys: string[]) => {
   for (const key of keys) {
@@ -53,10 +61,34 @@ const mapExcelRowToMember = (row: ExcelRow): ImportMemberInput => ({
   joinedAt: getCellValue(row, ["入會日期", "joinedAt", "Joined At", "加入日期"]),
 });
 
+function normalizeSearchText(value: unknown) {
+  return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function memberMatchesSearch(member: Member, keyword: string) {
+  if (!keyword) return true;
+  const searchableText = [
+    member.memberNo,
+    member.name,
+    member.phone,
+    member.normalizedPhone,
+    member.email,
+    member.status,
+    member.statusLabel,
+    member.note,
+  ]
+    .map(normalizeSearchText)
+    .join(" ");
+
+  return searchableText.includes(keyword);
+}
+
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [previewRows, setPreviewRows] = useState<ImportMemberInput[]>([]);
   const [selectedFileName, setSelectedFileName] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<MemberStatus | "">("");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isParsing, setIsParsing] = useState(false);
@@ -101,6 +133,27 @@ export default function AdminMembersPage() {
       duplicatePhoneCount,
     };
   }, [previewRows]);
+
+  const filteredMembers = useMemo(() => {
+    const keyword = normalizeSearchText(searchTerm);
+    return members.filter((member) => {
+      const statusMatched = filterStatus ? member.status === filterStatus : true;
+      return statusMatched && memberMatchesSearch(member, keyword);
+    });
+  }, [members, searchTerm, filterStatus]);
+
+  const statusCounts = useMemo(
+    () =>
+      members.reduce(
+        (acc, member) => {
+          acc.total += 1;
+          acc[member.status] = (acc[member.status] || 0) + 1;
+          return acc;
+        },
+        { total: 0, active: 0, inactive: 0, expired: 0, unknown: 0 } as Record<MemberStatus | "total", number>,
+      ),
+    [members],
+  );
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -252,7 +305,12 @@ export default function AdminMembersPage() {
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-slate-950">目前會員名單</h2>
+          <div>
+            <h2 className="text-xl font-bold text-slate-950">目前會員名單</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              共 {members.length} 筆，有效 {statusCounts.active} 筆，停用 {statusCounts.inactive} 筆，到期 {statusCounts.expired} 筆，未知 {statusCounts.unknown} 筆。
+            </p>
+          </div>
           <button
             type="button"
             onClick={refreshMembers}
@@ -261,6 +319,52 @@ export default function AdminMembersPage() {
             {isLoadingMembers ? "讀取中..." : "重新整理"}
           </button>
         </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_220px_auto]">
+          <label className="flex flex-col gap-2 text-sm font-semibold text-slate-700">
+            搜尋會員
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="搜尋編號、姓名、手機、Email、備註"
+              className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+            />
+          </label>
+
+          <label className="flex flex-col gap-2 text-sm font-semibold text-slate-700">
+            狀態篩選
+            <select
+              value={filterStatus}
+              onChange={(event) => setFilterStatus(event.target.value as MemberStatus | "")}
+              className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900"
+            >
+              {memberStatusOptions.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm("");
+                setFilterStatus("");
+              }}
+              className="w-full rounded-full border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700"
+            >
+              清除條件
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-3 text-sm text-slate-500">
+          目前顯示 {filteredMembers.length} 筆符合條件的會員。
+        </p>
+
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full border-collapse text-left text-sm">
             <thead className="bg-slate-100 text-slate-700">
@@ -275,8 +379,8 @@ export default function AdminMembersPage() {
               </tr>
             </thead>
             <tbody>
-              {members.map((member) => (
-                <tr key={member.id}>
+              {filteredMembers.map((member) => (
+                <tr key={member.id} className={member.status === "inactive" ? "bg-slate-50 text-slate-500" : ""}>
                   <td className="border border-slate-200 px-3 py-3">{member.memberNo || "未填寫"}</td>
                   <td className="border border-slate-200 px-3 py-3">{member.name || "未填寫"}</td>
                   <td className="border border-slate-200 px-3 py-3">{member.phone || "未填寫"}</td>
@@ -286,10 +390,10 @@ export default function AdminMembersPage() {
                   <td className="border border-slate-200 px-3 py-3">{member.note || "未填寫"}</td>
                 </tr>
               ))}
-              {members.length === 0 && (
+              {filteredMembers.length === 0 && (
                 <tr>
                   <td className="border border-slate-200 px-3 py-8 text-center text-slate-500" colSpan={7}>
-                    目前尚無會員資料。
+                    找不到符合條件的會員資料。
                   </td>
                 </tr>
               )}
