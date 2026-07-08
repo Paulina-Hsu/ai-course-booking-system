@@ -102,6 +102,8 @@ export interface Booking extends FirestoreMeta {
   amount: number;
   status: BookingStatus;
   note?: string;
+  isDeleted?: boolean;
+  deletedAt?: unknown;
 }
 
 export interface Admin {

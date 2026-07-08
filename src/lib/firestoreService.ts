@@ -882,7 +882,7 @@ export async function listBookings(filters: BookingQueryFilter = {}): Promise<(B
       : query(collection(firestore, "bookings")),
   );
 
-  const bookings = snapshot.docs.map((d) => mapDoc<Booking>(d));
+  const bookings = snapshot.docs.map((d) => mapDoc<Booking>(d)).filter((booking) => booking.isDeleted !== true);
   return bookings.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
 }
 
@@ -891,7 +891,8 @@ export async function getBookingById(bookingId: string): Promise<(Booking & { id
   const firestore = ensureDb();
   const snap = await getDoc(doc(firestore, "bookings", bookingId));
   if (!snap.exists()) return null;
-  return mapDoc<Booking>(snap);
+  const booking = mapDoc<Booking>(snap);
+  return booking.isDeleted === true ? null : booking;
 }
 
 export interface CreateBookingInput {
@@ -1102,6 +1103,7 @@ export async function updateBookingStatus(bookingId: string, nextStatus: Booking
     if (!fresh.exists()) throw new Error("找不到報名資料");
 
     const booking = fresh.data() as Booking;
+    if (booking.isDeleted === true) throw new Error("此報名資料已刪除，無法更新狀態");
     const currentStatus = booking.status;
     const wasUsingCapacity = doesStatusUseCapacity(currentStatus);
     let finalStatus = nextStatus;
@@ -1191,6 +1193,7 @@ export async function deleteBooking(bookingId: string): Promise<void> {
     if (!bookingSnap.exists()) throw new Error("找不到報名資料");
 
     const booking = bookingSnap.data() as Booking;
+    if (booking.isDeleted === true) return;
     const wasUsingCapacity = doesStatusUseCapacity(booking.status);
 
     if (booking.sessionId && wasUsingCapacity) {
@@ -1247,7 +1250,12 @@ export async function deleteBooking(bookingId: string): Promise<void> {
       tx.delete(bookingKeyRef);
     }
 
-    tx.delete(bookingRef);
+    tx.update(bookingRef, cleanPayload({
+      isDeleted: true,
+      deletedAt: serverTimestamp(),
+      status: "cancelled",
+      updatedAt: serverTimestamp(),
+    }));
   });
 }
 export async function getBookingCounts() {
