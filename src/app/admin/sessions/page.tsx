@@ -178,6 +178,22 @@ export default function AdminSessionsPage() {
     });
   };
 
+  const duplicateSession = (session: Session) => {
+    setForm({
+      id: "",
+      courseId: session.courseId,
+      title: `${session.title || "新期別"} 複製`,
+      weekday: String(session.weekday || "星期一"),
+      startTime: session.startTime,
+      endTime: session.endTime,
+      firstClassDate: "",
+      capacity: String(resolveCapacity(session)),
+      isOpen: session.isOpen ?? session.status !== "closed",
+    });
+    clearMessage("已帶入期別資料，請修改期別名稱與第一堂日期後新增");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const resetForm = () => {
     setForm(DEFAULT_SESSION_FORM);
   };
@@ -347,6 +363,12 @@ export default function AdminSessionsPage() {
                   onClick={() => editSession(session)}
                 >
                   編輯
+                </button>
+                <button
+                  className="rounded-full border border-slate-300 px-3 py-1 text-sm"
+                  onClick={() => duplicateSession(session)}
+                >
+                  複製
                 </button>
                 <button
                   className={`rounded-full px-3 py-1 text-sm ${isOpen ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}
