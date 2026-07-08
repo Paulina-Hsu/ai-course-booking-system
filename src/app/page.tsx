@@ -148,7 +148,6 @@ export default function HomePage() {
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Personal Coaching</p>
           <h2 className="mt-2 text-2xl font-bold text-slate-950">1 對 1 專屬課程</h2>
           <ul className="mt-4 space-y-3 text-slate-700">
-            <li>每次 1 小時，固定時段 08:30-09:30</li>
             <li>依後台開放日期預約，不分會員與非會員價</li>
             <li>可依照個人工作、學習、創作或教學需求安排</li>
             <li>適合需要個別指導、問題排解與專屬學習路線的人</li>
@@ -271,4 +270,5 @@ export default function HomePage() {
     </section>
   );
 }
+
 
