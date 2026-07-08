@@ -89,7 +89,7 @@ service cloud.firestore {
         data.isMember is bool &&
         (!("requestedMember" in data) || data.requestedMember is bool) &&
         (!("memberCheckStatus" in data) || data.memberCheckStatus in ["not_requested", "matched", "not_found", "inactive", "manual_review"]) &&
-        (!("matchedMemberId" in data) || (data.matchedMemberId is string && data.matchedMemberId.matches("^phone_[0-9]{8,15}$"))) &&
+        (!("matchedMemberId" in data) || (data.matchedMemberId is string && data.matchedMemberId.matches("^[A-Za-z0-9_-]{1,120}$"))) &&
         (!("memberCheckMessage" in data) || (data.memberCheckMessage is string && data.memberCheckMessage.size() <= 300)) &&
         (!("memberCheckedAt" in data) || data.memberCheckedAt == request.time) &&
         validBookingAmount(data) &&
@@ -209,6 +209,11 @@ service cloud.firestore {
 
     match /members/{memberId} {
       allow get: if isAdmin() || (isGuest() && memberId.matches("^phone_[0-9]{8,15}$"));
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /memberPhoneIndex/{phone} {
+      allow get: if isAdmin() || (isGuest() && phone.matches("^[0-9]{8,15}$"));
       allow list, create, update, delete: if isAdmin();
     }
 

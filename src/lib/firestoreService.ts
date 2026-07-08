@@ -2,6 +2,7 @@
   addDoc,
   collection,
   deleteField,
+  deleteDoc,
   doc,
   DocumentData,
   getDoc,
@@ -24,6 +25,7 @@ import {
   CourseType,
   Member,
   MemberCheckStatus,
+  MemberPhoneIndex,
   MemberStatus,
   OneOnOneSlot,
   Session,
@@ -191,11 +193,11 @@ function resolveMemberStatus(statusLabel?: string): { status: MemberStatus; stat
 }
 
 function buildMemberDocumentId(input: ImportMemberInput): string {
-  const normalizedPhone = normalizePhone(input.phone || "");
-  if (normalizedPhone) return `phone_${normalizedPhone}`;
-
   const memberNo = (input.memberNo || "").trim();
   if (memberNo) return `member_${memberNo.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+  const normalizedPhone = normalizePhone(input.phone || "");
+  if (normalizedPhone) return `phone_${normalizedPhone}`;
 
   throw new Error("會員資料缺少手機或編號，無法建立 Firestore 文件 ID");
 }
@@ -235,9 +237,23 @@ export async function getMemberByPhone(phone: string): Promise<Member | null> {
   const normalizedPhone = normalizePhone(phone);
   if (!normalizedPhone) return null;
   const firestore = ensureDb();
-  const snap = await getDoc(doc(firestore, "members", `phone_${normalizedPhone}`));
-  if (!snap.exists()) return null;
-  return mapDoc<Member>(snap);
+  const indexSnap = await getDoc(doc(firestore, "memberPhoneIndex", normalizedPhone));
+  if (indexSnap.exists()) {
+    const indexData = mapDoc<MemberPhoneIndex>(indexSnap);
+    return {
+      id: indexData.memberId,
+      memberNo: indexData.memberNo,
+      name: indexData.name,
+      phone: normalizedPhone,
+      normalizedPhone,
+      status: indexData.status,
+      statusLabel: indexData.statusLabel,
+    };
+  }
+
+  const legacySnap = await getDoc(doc(firestore, "members", `phone_${normalizedPhone}`));
+  if (!legacySnap.exists()) return null;
+  return mapDoc<Member>(legacySnap);
 }
 
 export async function upsertMembers(inputs: ImportMemberInput[]): Promise<MemberImportResult> {
@@ -245,6 +261,7 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
   const firestore = ensureDb();
   const errors: string[] = [];
   const importedMemberIds = new Set<string>();
+  const importedPhones = new Set<string>();
   let importedCount = 0;
   let skippedCount = 0;
   let deactivatedCount = 0;
@@ -264,7 +281,17 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
 
       const statusInfo = resolveMemberStatus(input.statusLabel);
       const memberRef = doc(firestore, "members", buildMemberDocumentId(input));
+      const previousSnap = await getDoc(memberRef);
+      const previousMember = previousSnap.exists() ? (previousSnap.data() as Member) : null;
+      const previousPhone = normalizePhone(previousMember?.phone || previousMember?.normalizedPhone || "");
+
       importedMemberIds.add(memberRef.id);
+      if (normalizedPhone) importedPhones.add(normalizedPhone);
+
+      if (previousPhone && previousPhone !== normalizedPhone) {
+        await deleteDoc(doc(firestore, "memberPhoneIndex", previousPhone));
+      }
+
       await setDoc(
         memberRef,
         cleanPayload({
@@ -282,6 +309,23 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
         }),
         { merge: true },
       );
+
+      if (normalizedPhone) {
+        await setDoc(
+          doc(firestore, "memberPhoneIndex", normalizedPhone),
+          cleanPayload({
+            memberId: memberRef.id,
+            memberNo: memberNo || undefined,
+            name: name || "未填寫",
+            normalizedPhone,
+            status: statusInfo.status,
+            statusLabel: statusInfo.statusLabel,
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true },
+        );
+      }
+
       importedCount += 1;
     } catch (error) {
       skippedCount += 1;
@@ -302,6 +346,22 @@ export async function upsertMembers(inputs: ImportMemberInput[]): Promise<Member
       statusLabel: "已停用（不在最新 Excel）",
       updatedAt: serverTimestamp(),
     }));
+    const normalizedPhone = normalizePhone(member.phone || member.normalizedPhone || "");
+    if (normalizedPhone && !importedPhones.has(normalizedPhone)) {
+      await setDoc(
+        doc(firestore, "memberPhoneIndex", normalizedPhone),
+        cleanPayload({
+          memberId: memberDoc.id,
+          memberNo: member.memberNo,
+          name: member.name || "未填寫",
+          normalizedPhone,
+          status: "inactive",
+          statusLabel: "已停用（不在最新 Excel）",
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true },
+      );
+    }
     deactivatedCount += 1;
   }
 

@@ -124,6 +124,16 @@ export interface Member extends FirestoreMeta {
   importedAt?: unknown;
 }
 
+export interface MemberPhoneIndex extends FirestoreMeta {
+  id: string;
+  memberId: string;
+  memberNo?: string;
+  name: string;
+  normalizedPhone: string;
+  status: MemberStatus;
+  statusLabel: string;
+}
+
 export interface Settings extends FirestoreMeta {
   id: string;
   maxCapacityPerSession: number;
