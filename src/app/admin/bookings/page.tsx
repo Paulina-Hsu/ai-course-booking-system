@@ -1,11 +1,20 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { BOOKING_STATUS_OPTIONS, Booking, ContactPreference, Course, MemberCheckStatus, OneOnOneSlot, Session } from "@/lib/firestoreTypes";
 import {
-  formatSessionLabel,
+  BOOKING_STATUS_OPTIONS,
+  Booking,
+  BookingStatus,
+  ContactPreference,
+  Course,
+  MemberCheckStatus,
+  OneOnOneSlot,
+  Session,
+} from "@/lib/firestoreTypes";
+import {
   deleteBooking,
+  formatSessionLabel,
   listBookings,
   listCourses,
   listOneOnOneSlots,
@@ -13,7 +22,6 @@ import {
   listSessions,
   updateBookingStatus,
 } from "@/lib/firestoreService";
-import { BookingStatus } from "@/lib/firestoreTypes";
 
 const statusMap = Object.fromEntries(BOOKING_STATUS_OPTIONS.map((item) => [item.value, item.label]));
 const contactPreferenceMap: Record<ContactPreference, string> = {
@@ -70,6 +78,28 @@ function formatBookingAmount(amount: number): string {
   return `NT$${new Intl.NumberFormat("zh-TW").format(Number(amount) || 0)}`;
 }
 
+function formatDateTime(value: unknown): string {
+  if (!value) return "未填寫";
+  if (value instanceof Date) return value.toLocaleString("zh-TW");
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "toDate" in value) {
+    const timestamp = value as { toDate?: () => Date };
+    if (typeof timestamp.toDate === "function") {
+      return timestamp.toDate().toLocaleString("zh-TW");
+    }
+  }
+  return "未填寫";
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-white p-3">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-900">{value}</p>
+    </div>
+  );
+}
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<(Booking & { id: string })[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -78,6 +108,7 @@ export default function AdminBookingsPage() {
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterSessionId, setFilterSessionId] = useState("");
   const [filterStatus, setFilterStatus] = useState<BookingStatus | "">("");
+  const [expandedBookingId, setExpandedBookingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState("");
 
@@ -86,7 +117,10 @@ export default function AdminBookingsPage() {
     [courses],
   );
 
-  const sessionMap = useMemo(() => Object.fromEntries(sessions.map((session) => [session.id, getSessionLabel(session)])), [sessions]);
+  const sessionMap = useMemo(
+    () => Object.fromEntries(sessions.map((session) => [session.id, getSessionLabel(session)])),
+    [sessions],
+  );
 
   const sessionClassDatesMap = useMemo(
     () => Object.fromEntries(sessions.map((session) => [session.id, getSessionClassDatesText(session)])),
@@ -191,6 +225,7 @@ export default function AdminBookingsPage() {
     try {
       setActionError("");
       await deleteBooking(booking.id);
+      if (expandedBookingId === booking.id) setExpandedBookingId("");
       await load();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "刪除失敗");
@@ -199,7 +234,7 @@ export default function AdminBookingsPage() {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">報名管理</h1>
         <button onClick={onExportCsv} className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white">
           匯出 CSV
@@ -263,78 +298,104 @@ export default function AdminBookingsPage() {
       {loading ? <p>讀取中...</p> : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1860px] table-fixed border border-slate-200 bg-white text-sm">
+        <table className="w-full min-w-[1180px] table-fixed border border-slate-200 bg-white text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
-              <th className="border border-slate-200 px-3 py-2">學員</th>
-              <th className="border border-slate-200 px-3 py-2">手機</th>
-              <th className="border border-slate-200 px-3 py-2">Email</th>
-              <th className="border border-slate-200 px-3 py-2">LINE ID</th>
-              <th className="border border-slate-200 px-3 py-2">聯絡方式</th>
-              <th className="border border-slate-200 px-3 py-2">年齡</th>
-              <th className="border border-slate-200 px-3 py-2">AI 程度</th>
-              <th className="border border-slate-200 px-3 py-2">備註</th>
-              <th className="border border-slate-200 px-3 py-2">課程</th>
-              <th className="border border-slate-200 px-3 py-2">期別</th>
-              <th className="border border-slate-200 px-3 py-2">金額</th>
-              <th className="border border-slate-200 px-3 py-2">會員核對</th>
-              <th className="border border-slate-200 px-3 py-2">狀態</th>
-              <th className="border border-slate-200 px-3 py-2">操作</th>
+              <th className="w-[120px] border border-slate-200 px-3 py-2">報名時間</th>
+              <th className="w-[120px] border border-slate-200 px-3 py-2">學員</th>
+              <th className="w-[120px] border border-slate-200 px-3 py-2">手機</th>
+              <th className="w-[170px] border border-slate-200 px-3 py-2">課程</th>
+              <th className="w-[240px] border border-slate-200 px-3 py-2">期別</th>
+              <th className="w-[100px] border border-slate-200 px-3 py-2">金額</th>
+              <th className="w-[150px] border border-slate-200 px-3 py-2">會員核對</th>
+              <th className="w-[150px] border border-slate-200 px-3 py-2">狀態</th>
+              <th className="w-[130px] border border-slate-200 px-3 py-2">操作</th>
             </tr>
           </thead>
           <tbody>
-            {bookings.map((booking) => (
-              <tr key={booking.id}>
-                <td className="border border-slate-200 px-3 py-2">{booking.name}</td>
-                <td className="border border-slate-200 px-3 py-2">{booking.phone}</td>
-                <td className="break-all border border-slate-200 px-3 py-2 leading-relaxed whitespace-normal">{displayValue(booking.email)}</td>
-                <td className="break-all border border-slate-200 px-3 py-2 leading-relaxed whitespace-normal">{displayValue(booking.lineId)}</td>
-                <td className="border border-slate-200 px-3 py-2">{displayContactPreference(booking.contactPreference)}</td>
-                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.ageRange)}</td>
-                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.aiLevel)}</td>
-                <td className="border border-slate-200 px-3 py-2">{displayValue(booking.learningGoal)}</td>
-                <td className="border border-slate-200 px-3 py-2">{courseMap[booking.courseId] || booking.courseId}</td>
-                <td className="border border-slate-200 px-3 py-2">
-                  <span title={booking.sessionId ? sessionClassDatesMap[booking.sessionId] || undefined : undefined}>
-                    {booking.sessionId
-                      ? sessionMap[booking.sessionId] || booking.sessionId
-                      : booking.oneOnOneSlotId
-                        ? slotMap[booking.oneOnOneSlotId] || booking.oneOnOneSlotId
-                        : "-"}
-                  </span>
-                </td>
-                <td className="border border-slate-200 px-3 py-2">{formatBookingAmount(booking.amount)}</td>
-                <td className="border border-slate-200 px-3 py-2">
-                  <div className="space-y-1">
-                    <p>自填：{(booking.requestedMember ?? booking.isMember) ? "會員" : "非會員"}</p>
-                    <p>核對：{booking.memberCheckStatus ? memberCheckStatusMap[booking.memberCheckStatus] : "未核對"}</p>
-                    <p>套用：{booking.isMember ? "會員價" : "非會員價"}</p>
-                  </div>
-                </td>
-                <td className="border border-slate-200 px-3 py-2">
-                  <select
-                    className="w-full rounded border border-slate-300 px-2 py-1"
-                    value={booking.status}
-                    onChange={(event) => onStatusChange(booking.id, event.target.value as BookingStatus)}
-                  >
-                    {BOOKING_STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {adminStatusLabelMap[option.value]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="border border-slate-200 px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={() => onDeleteBooking(booking)}
-                    className="rounded-full border border-rose-300 px-3 py-1 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                  >
-                    刪除
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {bookings.map((booking) => {
+              const sessionText = booking.sessionId
+                ? sessionMap[booking.sessionId] || booking.sessionId
+                : booking.oneOnOneSlotId
+                  ? slotMap[booking.oneOnOneSlotId] || booking.oneOnOneSlotId
+                  : "-";
+              const classDatesText = booking.sessionId ? sessionClassDatesMap[booking.sessionId] || "未填寫" : "不適用";
+              const memberStatus = booking.memberCheckStatus ? memberCheckStatusMap[booking.memberCheckStatus] : "未核對";
+              const isExpanded = expandedBookingId === booking.id;
+
+              return (
+                <>
+                  <tr key={booking.id}>
+                    <td className="border border-slate-200 px-3 py-2 align-top">{formatDateTime(booking.createdAt)}</td>
+                    <td className="border border-slate-200 px-3 py-2 align-top font-semibold">{booking.name}</td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">{booking.phone}</td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">{courseMap[booking.courseId] || booking.courseId}</td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">
+                      <span title={booking.sessionId ? sessionClassDatesMap[booking.sessionId] || undefined : undefined}>
+                        {sessionText}
+                      </span>
+                    </td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">{formatBookingAmount(booking.amount)}</td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">
+                      <p>{memberStatus}</p>
+                      <p className="mt-1 text-xs text-slate-500">{booking.isMember ? "套用會員價" : "非會員價"}</p>
+                    </td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">
+                      <select
+                        className="w-full rounded border border-slate-300 px-2 py-1"
+                        value={booking.status}
+                        onChange={(event) => onStatusChange(booking.id, event.target.value as BookingStatus)}
+                      >
+                        {BOOKING_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {adminStatusLabelMap[option.value]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="border border-slate-200 px-3 py-2 align-top">
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedBookingId(isExpanded ? "" : booking.id)}
+                          className="rounded-full border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          {isExpanded ? "收合詳情" : "查看詳情"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteBooking(booking)}
+                          className="rounded-full border border-rose-300 px-3 py-1 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {isExpanded ? (
+                    <tr key={`${booking.id}-details`}>
+                      <td className="border border-slate-200 bg-slate-50 p-4" colSpan={9}>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          <DetailItem label="Email" value={displayValue(booking.email)} />
+                          <DetailItem label="LINE ID" value={displayValue(booking.lineId)} />
+                          <DetailItem label="希望聯絡方式" value={displayContactPreference(booking.contactPreference)} />
+                          <DetailItem label="年齡區間" value={displayValue(booking.ageRange)} />
+                          <DetailItem label="AI 使用程度" value={displayValue(booking.aiLevel)} />
+                          <DetailItem label="學習需求或備註" value={displayValue(booking.learningGoal)} />
+                          <DetailItem label="4 堂日期" value={classDatesText} />
+                          <DetailItem label="自填會員" value={(booking.requestedMember ?? booking.isMember) ? "是" : "否"} />
+                          <DetailItem label="會員核對訊息" value={displayValue(booking.memberCheckMessage)} />
+                          <DetailItem label="訂單編號" value={booking.id} />
+                          <DetailItem label="建立時間" value={formatDateTime(booking.createdAt)} />
+                          <DetailItem label="更新時間" value={formatDateTime(booking.updatedAt)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </>
+              );
+            })}
           </tbody>
         </table>
       </div>
